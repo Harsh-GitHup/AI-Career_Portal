@@ -71,3 +71,5 @@ test-results/
 .venv/
 __pycache__/
 *.pyc
+
+career-readiness-platform

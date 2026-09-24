@@ -1,6 +1,6 @@
- # AI Career Portal
+# AI Career Portal
 
-An AI-powered career platform designed to help users discover career opportunities, improve their professional profiles, and prepare for the job market.
+An AI-powered career platform designed to help students discover career opportunities, improve their professional profiles, and prepare for the job market.
 
 ## Overview
 
@@ -21,7 +21,7 @@ The AI Career Portal brings career guidance and job-search tools into one place.
 Clone the repository and install the project dependencies using the package manager configured for the application.
 
 ```bash
-git clone [https://github.com/SahilUK77/AI-Career_Portal.git](https://github.com/SahilUK77/AI-Career_Portal.git)
+git clone https://github.com/Harsh-GitHup/AI-Career_Portal.git
 cd AI-Career_Portal
 ```
 
