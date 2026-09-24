@@ -49,6 +49,36 @@ def run_courses_scraper(self):
         logger.error(f"Error executing courses scraper: {exc}")
         raise self.retry(exc=exc, countdown=60)
 
+@shared_task(bind=True, max_retries=3)
+def run_universal_scraper(self, profile_id: int):
+    try:
+        from .adapters.universal_scraper import UniversalScraperAdapter
+        profile = StudentProfile.objects.get(id=profile_id)
+        adapter = UniversalScraperAdapter()
+        raw_records = adapter.fetch_all(profile.target_role)
+        records_saved = 0
+        for norm in raw_records:
+            skills = norm.pop("skills", [])
+            with transaction.atomic():
+                opp, created = Opportunity.objects.update_or_create(
+                    dedupe_hash=norm["dedupe_hash"],
+                    defaults=norm
+                )
+                for s in skills:
+                    OpportunitySkill.objects.get_or_create(
+                        opportunity=opp,
+                        skill_name=s.strip()
+                    )
+            records_saved += 1
+        logger.info(f"Successfully processed {records_saved} universal opportunities.")
+        
+        # trigger matching again
+        calculate_matches_for_profile.delay(profile_id)
+        
+    except Exception as exc:
+        logger.error(f"Error executing universal scraper: {exc}")
+        raise self.retry(exc=exc, countdown=60)
+
 @shared_task
 def calculate_matches_for_profile(profile_id: int):
     """Calculates scores between an uploaded resume profile and active catalog listings."""

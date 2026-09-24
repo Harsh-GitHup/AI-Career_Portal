@@ -1,19 +1,27 @@
 import traceback
-from django.shortcuts import render
 from rest_framework import generics, filters, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 
-from .models import Opportunity, ProfileMatch, StudentProfile
-from .serializers import OpportunitySerializer, ProfileMatchSerializer, StudentProfileSerializer
+from .models import Opportunity, ProfileMatch, StudentProfile, AcademicRecord
+from .serializers import OpportunitySerializer, ProfileMatchSerializer, StudentProfileSerializer, AcademicRecordSerializer
 from .ml_pipeline import analyze_resume
-from .tasks import calculate_matches_for_profile, run_govt_schemes_scraper, run_courses_scraper
+from .tasks import calculate_matches_for_profile, run_govt_schemes_scraper, run_courses_scraper, run_universal_scraper
+from langchain_google_genai import ChatGoogleGenerativeAI
+from django.contrib.auth import login
+from django.contrib.auth.models import User
+import os
+from rest_framework import viewsets
 
-def dashboard_view(request):
-    """Renders the single-page application dashboard interface."""
-    return render(request, 'index.html')
+class StudentProfileViewSet(viewsets.ModelViewSet):
+    queryset = StudentProfile.objects.all()
+    serializer_class = StudentProfileSerializer
+
+class AcademicRecordViewSet(viewsets.ModelViewSet):
+    queryset = AcademicRecord.objects.all()
+    serializer_class = AcademicRecordSerializer
 
 
 @method_decorator(csrf_exempt, name='dispatch')
@@ -50,7 +58,8 @@ class UploadResumeAPIView(APIView):
                 run_govt_schemes_scraper()
                 run_courses_scraper()
 
-            # 4. Trigger Celery Asynchronous Match Engine
+            # 4. Trigger Celery Asynchronous Match Engine & Scrapers
+            run_universal_scraper.delay(profile.id)
             calculate_matches_for_profile.delay(profile.id)
 
             return Response({
@@ -74,8 +83,10 @@ class OpportunityListAPIView(generics.ListAPIView):
     """Search and filter catalog of opportunities."""
     queryset = Opportunity.objects.filter(is_active=True)
     serializer_class = OpportunitySerializer
-    filter_backends = [filters.SearchFilter]
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['title', 'provider', 'description', 'required_skills__skill_name']
+    ordering_fields = ['created_at', 'title', 'deadline']
+    ordering = ['-created_at']
 
     def get_queryset(self):
         qs = super().get_queryset()
@@ -102,3 +113,44 @@ class RecommendedMatchesAPIView(APIView):
             "schemes": ProfileMatchSerializer(schemes, many=True).data,
             "opportunities": ProfileMatchSerializer(others, many=True).data
         })
+
+@method_decorator(csrf_exempt, name='dispatch')
+class SocialLoginAPIView(APIView):
+    def post(self, request, *args, **kwargs):
+        # A simple mocked social login view for the sake of completeness
+        email = request.data.get('email')
+        name = request.data.get('name', 'Student')
+        if not email:
+            return Response({"error": "Email is required"}, status=status.HTTP_400_BAD_REQUEST)
+        user, created = User.objects.get_or_create(username=email, defaults={'email': email, 'first_name': name})
+        login(request, user)
+        return Response({"message": "Successfully logged in", "user_id": user.id})
+
+@method_decorator(csrf_exempt, name='dispatch')
+class ChatbotAPIView(APIView):
+    def post(self, request, *args, **kwargs):
+        message = request.data.get('message')
+        profile_id = request.data.get('profile_id')
+        if not message:
+            return Response({"error": "Message is required"}, status=status.HTTP_400_BAD_REQUEST)
+            
+        context = "You are a helpful CareerAI chatbot."
+        if profile_id:
+            try:
+                profile = StudentProfile.objects.get(id=profile_id)
+                context += f"\nThe user is a {profile.target_role} with skills: {', '.join(profile.current_skills)}."
+            except StudentProfile.DoesNotExist:
+                pass
+                
+        api_key = os.getenv("GOOGLE_API_KEY")
+        if api_key:
+            llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash-latest", google_api_key=api_key, temperature=0.7)
+            try:
+                response = llm.invoke(f"{context}\n\nUser: {message}\nAI:")
+                ai_text = response.content
+            except Exception as e:
+                ai_text = "Sorry, I am facing an issue right now."
+        else:
+            ai_text = "I'm sorry, my AI backend is not configured."
+
+        return Response({"response": ai_text})

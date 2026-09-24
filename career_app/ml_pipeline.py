@@ -35,10 +35,10 @@ def analyze_resume(uploaded_file_bytes: bytes) -> ResumeAnalysis:
     if not api_key:
         raise ValueError("GOOGLE_API_KEY environment variable is missing in .env")
 
-    model_name = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
+    model_name = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
 
     llm = ChatGoogleGenerativeAI(
-        model="gemini-3.8-flash",
+        model="gemini-1.5-flash-latest",
         google_api_key=api_key,
         temperature=0.1
     )

@@ -4,17 +4,29 @@ from django.contrib.auth.models import User
 class StudentProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, null=True, blank=True)
     full_name = models.CharField(max_length=255, default="Student")
+    bio = models.TextField(blank=True)
     target_role = models.CharField(max_length=255, blank=True, db_index=True)
     current_skills = models.JSONField(default=list, help_text="List of extracted candidate skills")
     skill_gaps = models.JSONField(default=list, help_text="List of missing skills for target role")
     resume_improvements = models.JSONField(default=list, help_text="Actionable formatting/content suggestions")
     interview_questions = models.JSONField(default=list, help_text="Tailored mock interview questions")
     readiness_score = models.IntegerField(default=50)
+    employability_score = models.IntegerField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
         return f"{self.full_name} ({self.target_role})"
+
+class AcademicRecord(models.Model):
+    student = models.ForeignKey(StudentProfile, on_delete=models.CASCADE, related_name='academics')
+    degree = models.CharField(max_length=150, help_text="e.g., B.Tech in Computer Science")
+    institution = models.CharField(max_length=200)
+    graduation_year = models.IntegerField()
+    cgpa = models.DecimalField(max_digits=4, decimal_places=2, help_text="e.g., 7.90")
+
+    def __str__(self):
+        return f"{self.degree} - {self.institution}"
 
 
 class Opportunity(models.Model):
