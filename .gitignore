@@ -72,4 +72,6 @@ test-results/
 __pycache__/
 *.pyc
 
+# Project and test files
 career-readiness-platform
+dummy.pdf

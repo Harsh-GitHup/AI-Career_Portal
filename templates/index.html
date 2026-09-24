@@ -9,18 +9,74 @@
     <style>
         .active-tab { background-color: #e0e7ff; color: #3730a3; font-weight: 600; border-right: 4px solid #4f46e5; }
         .chat-window { transition: transform 0.3s ease-in-out; }
+        .toast-enter { transform: translateY(100%); opacity: 0; }
+        .toast-enter-active { transform: translateY(0); opacity: 1; transition: all 0.3s ease-out; }
+        .toast-exit { transform: translateY(0); opacity: 1; }
+        .toast-exit-active { transform: translateY(100%); opacity: 0; transition: all 0.3s ease-in; }
     </style>
 </head>
-<body class="bg-gray-50 text-gray-800 flex h-screen overflow-hidden">
+<body class="bg-gray-50 text-gray-800 flex h-screen overflow-hidden relative">
+
+    <!-- Toast Container -->
+    <div id="toastContainer" class="fixed bottom-4 left-1/2 transform -translate-x-1/2 z-[100] flex flex-col space-y-2 pointer-events-none">
+    </div>
 
     <!-- Login Modal -->
     <div id="loginModal" class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center hidden">
         <div class="bg-white p-8 rounded-xl shadow-lg w-96 text-center">
-            <h2 class="text-2xl font-bold mb-4">Login</h2>
+            
+            <div class="flex justify-center mb-6">
+                <button id="tabLogin" onclick="toggleAuth('login')" class="w-1/2 py-2 font-bold border-b-2 border-indigo-600 text-indigo-600">Login</button>
+                <button id="tabRegister" onclick="toggleAuth('register')" class="w-1/2 py-2 font-bold border-b-2 border-transparent text-gray-500 hover:text-indigo-600">Register</button>
+            </div>
+
+            <!-- Login Form -->
+            <div id="loginFormContainer">
+                <div class="mb-4 text-left">
+                    <label class="block text-gray-700 text-sm font-bold mb-2">Username</label>
+                    <input id="loginUsername" type="text" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" placeholder="Enter username">
+                </div>
+                
+                <div class="mb-6 text-left">
+                    <label class="block text-gray-700 text-sm font-bold mb-2">Password</label>
+                    <input id="loginPassword" type="password" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 mb-3 leading-tight focus:outline-none focus:shadow-outline" placeholder="Enter password">
+                </div>
+                
+                <button onclick="standardLogin()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded mb-4">
+                    Login
+                </button>
+            </div>
+
+            <!-- Register Form -->
+            <div id="registerFormContainer" class="hidden">
+                <div class="mb-4 text-left">
+                    <label class="block text-gray-700 text-sm font-bold mb-2">Username</label>
+                    <input id="registerUsername" type="text" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" placeholder="Choose a username">
+                </div>
+                
+                <div class="mb-4 text-left">
+                    <label class="block text-gray-700 text-sm font-bold mb-2">Email</label>
+                    <input id="registerEmail" type="email" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" placeholder="Enter email (optional)">
+                </div>
+                
+                <div class="mb-6 text-left">
+                    <label class="block text-gray-700 text-sm font-bold mb-2">Password</label>
+                    <input id="registerPassword" type="password" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 mb-3 leading-tight focus:outline-none focus:shadow-outline" placeholder="Create password">
+                </div>
+                
+                <button onclick="standardRegister()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded mb-4">
+                    Create Account
+                </button>
+            </div>
+
+            <div class="flex items-center my-4 before:flex-1 before:border-t before:border-gray-300 before:mt-0.5 after:flex-1 after:border-t after:border-gray-300 after:mt-0.5">
+                <p class="text-center font-semibold mx-4 mb-0">OR</p>
+            </div>
+
             <button onclick="socialLogin()" class="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded mb-2 flex items-center justify-center">
                 <i class="fa-brands fa-google mr-2"></i> Continue with Google
             </button>
-            <button onclick="closeLogin()" class="text-sm text-gray-500 hover:underline">Cancel</button>
+            <button onclick="closeLogin()" class="text-sm text-gray-500 hover:underline mt-2">Cancel</button>
         </div>
     </div>
 
@@ -50,6 +106,15 @@
             <button onclick="showLogin()" id="loginBtn" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors text-center">
                 Login
             </button>
+            <div id="userProfileControls" class="hidden flex-col space-y-2">
+                <div class="text-sm font-bold text-gray-800 text-center flex items-center justify-center space-x-2">
+                    <i class="fa-solid fa-user-circle text-indigo-600"></i>
+                    <span id="loggedInUser"></span>
+                </div>
+                <button onclick="logout()" class="bg-red-500 hover:bg-red-600 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors text-center">
+                    Logout
+                </button>
+            </div>
             <div class="text-xs text-gray-400 text-center">Madhya Pradesh Career Portal &copy; 2026</div>
         </div>
     </aside>
@@ -89,25 +154,40 @@
                     </div>
                 </div>
 
-                <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                    <div class="p-6 border-b border-gray-100">
-                        <h4 class="text-base font-bold text-gray-900">Your AI Skill Gap Analysis</h4>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                        <div class="p-6 border-b border-gray-100">
+                            <h4 class="text-base font-bold text-gray-900">Your AI Skill Gap Analysis</h4>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left text-sm text-gray-600">
+                                <thead class="bg-gray-50 text-gray-400 text-xs uppercase font-semibold">
+                                    <tr>
+                                        <th class="py-3 px-6">Skill Requirement</th>
+                                        <th class="py-3 px-6">Level</th>
+                                        <th class="py-3 px-6">Recommendation</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="skillsTableBody" class="divide-y divide-gray-100">
+                                    <tr>
+                                        <td colspan="3" class="py-4 px-6 text-center text-gray-500">Upload resume to view analysis</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-left text-sm text-gray-600">
-                            <thead class="bg-gray-50 text-gray-400 text-xs uppercase font-semibold">
-                                <tr>
-                                    <th class="py-3 px-6">Skill Requirement</th>
-                                    <th class="py-3 px-6">Level</th>
-                                    <th class="py-3 px-6">Recommendation</th>
-                                </tr>
-                            </thead>
-                            <tbody id="skillsTableBody" class="divide-y divide-gray-100">
-                                <tr>
-                                    <td colspan="3" class="py-4 px-6 text-center text-gray-500">Upload resume to view analysis</td>
-                                </tr>
-                            </tbody>
-                        </table>
+
+                    <div class="bg-white rounded-xl border border-gray-200 overflow-hidden flex flex-col h-[400px]">
+                        <div class="p-6 border-b border-gray-100">
+                            <h4 class="text-base font-bold text-gray-900">Resume Preview</h4>
+                        </div>
+                        <div class="p-4 flex-1">
+                            <iframe id="resumePreviewFrame" src="" class="w-full h-full border border-gray-200 rounded hidden"></iframe>
+                            <div id="resumePlaceholder" class="w-full h-full flex flex-col items-center justify-center text-gray-400 border-2 border-dashed border-gray-200 rounded bg-gray-50">
+                                <i class="fa-solid fa-file-pdf text-4xl mb-2"></i>
+                                <span>No resume uploaded yet</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -192,9 +272,62 @@
 
     <!-- JavaScript Controller -->
     <script>
-        let currentProfileId = null;
-        let currentUserId = null;
+        let currentProfileId = localStorage.getItem('profile_id');
+        let currentUserId = localStorage.getItem('user_id');
         let currentPage = 1;
+
+        window.onload = () => {
+            const savedUsername = localStorage.getItem('username');
+            if (currentUserId && savedUsername) {
+                document.getElementById('loginBtn').classList.add('hidden');
+                const profileControls = document.getElementById('userProfileControls');
+                profileControls.classList.remove('hidden');
+                profileControls.classList.add('flex');
+                document.getElementById('loggedInUser').innerText = savedUsername;
+            }
+            
+            const savedPdf = localStorage.getItem('saved_resume_pdf');
+            if (savedPdf) {
+                document.getElementById('resumePreviewFrame').src = savedPdf;
+                document.getElementById('resumePreviewFrame').classList.remove('hidden');
+                document.getElementById('resumePlaceholder').classList.add('hidden');
+            }
+        };
+
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            
+            // Base styles
+            toast.className = `toast-enter min-w-[300px] px-6 py-3 rounded-lg shadow-lg flex items-center justify-between pointer-events-auto border-l-4`;
+            
+            // Type-specific styles
+            if (type === 'success') {
+                toast.classList.add('bg-white', 'border-emerald-500', 'text-gray-800');
+                toast.innerHTML = `<div class="flex items-center"><i class="fa-solid fa-circle-check text-emerald-500 mr-3 text-lg"></i><span class="font-medium">${message}</span></div>`;
+            } else if (type === 'error') {
+                toast.classList.add('bg-white', 'border-red-500', 'text-gray-800');
+                toast.innerHTML = `<div class="flex items-center"><i class="fa-solid fa-circle-exclamation text-red-500 mr-3 text-lg"></i><span class="font-medium">${message}</span></div>`;
+            } else {
+                toast.classList.add('bg-gray-800', 'border-gray-600', 'text-white');
+                toast.innerHTML = `<div class="flex items-center"><i class="fa-solid fa-bell text-gray-300 mr-3 text-lg"></i><span class="font-medium">${message}</span></div>`;
+            }
+
+            container.appendChild(toast);
+            
+            // Trigger animation
+            requestAnimationFrame(() => {
+                toast.classList.remove('toast-enter');
+                toast.classList.add('toast-enter-active');
+            });
+
+            // Remove after 3 seconds
+            setTimeout(() => {
+                toast.classList.remove('toast-enter-active');
+                toast.classList.add('toast-exit-active');
+                setTimeout(() => toast.remove(), 500);
+            }, 5000);
+        }
 
         function switchTab(tabKey) {
             document.querySelectorAll('.content-view').forEach(el => el.classList.add('hidden'));
@@ -223,12 +356,147 @@
                 const data = await res.json();
                 if(res.ok) {
                     currentUserId = data.user_id;
-                    document.getElementById('loginBtn').innerText = "Logged In";
+                    localStorage.setItem('user_id', data.user_id);
+                    localStorage.setItem('username', data.username || "Student");
+                    document.getElementById('loginBtn').classList.add('hidden');
+                    const profileControls = document.getElementById('userProfileControls');
+                    profileControls.classList.remove('hidden');
+                    profileControls.classList.add('flex');
+                    document.getElementById('loggedInUser').innerText = data.username || "Student";
                     closeLogin();
-                    alert("Successfully logged in via Google!");
+                    showToast("Successfully logged in via Google!", "success");
                 }
             } catch(e) {
                 console.error(e);
+                showToast("Connection error", "error");
+            }
+        }
+
+        async function standardLogin() {
+            const username = document.getElementById('loginUsername').value;
+            const password = document.getElementById('loginPassword').value;
+            
+            if(!username || !password) {
+                showToast("Please enter username and password", "error");
+                return;
+            }
+
+            try {
+                const res = await fetch('http://127.0.0.1:8000/api/login/', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({username, password})
+                });
+                const data = await res.json();
+                if(res.ok) {
+                    currentUserId = data.user_id;
+                    localStorage.setItem('user_id', data.user_id);
+                    localStorage.setItem('username', data.username);
+                    document.getElementById('loginBtn').classList.add('hidden');
+                    const profileControls = document.getElementById('userProfileControls');
+                    profileControls.classList.remove('hidden');
+                    profileControls.classList.add('flex');
+                    document.getElementById('loggedInUser').innerText = data.username;
+                    closeLogin();
+                    showToast("Successfully logged in!", "success");
+                } else {
+                    showToast(data.error || "Login failed", "error");
+                }
+            } catch(e) {
+                console.error(e);
+                showToast("Error connecting to server", "error");
+            }
+        }
+
+        function toggleAuth(mode) {
+            const loginForm = document.getElementById('loginFormContainer');
+            const registerForm = document.getElementById('registerFormContainer');
+            const tabLogin = document.getElementById('tabLogin');
+            const tabRegister = document.getElementById('tabRegister');
+            
+            if (mode === 'login') {
+                loginForm.classList.remove('hidden');
+                registerForm.classList.add('hidden');
+                tabLogin.classList.add('border-indigo-600', 'text-indigo-600');
+                tabLogin.classList.remove('border-transparent', 'text-gray-500');
+                tabRegister.classList.remove('border-indigo-600', 'text-indigo-600');
+                tabRegister.classList.add('border-transparent', 'text-gray-500');
+            } else {
+                loginForm.classList.add('hidden');
+                registerForm.classList.remove('hidden');
+                tabRegister.classList.add('border-indigo-600', 'text-indigo-600');
+                tabRegister.classList.remove('border-transparent', 'text-gray-500');
+                tabLogin.classList.remove('border-indigo-600', 'text-indigo-600');
+                tabLogin.classList.add('border-transparent', 'text-gray-500');
+            }
+        }
+
+        async function standardRegister() {
+            const username = document.getElementById('registerUsername').value;
+            const email = document.getElementById('registerEmail').value;
+            const password = document.getElementById('registerPassword').value;
+            
+            if(!username || !password) {
+                showToast("Please enter username and password", "error");
+                return;
+            }
+
+            try {
+                const res = await fetch('http://127.0.0.1:8000/api/register/', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({username, email, password})
+                });
+                const data = await res.json();
+                if(res.ok) {
+                    currentUserId = data.user_id;
+                    localStorage.setItem('user_id', data.user_id);
+                    localStorage.setItem('username', data.username);
+                    document.getElementById('loginBtn').classList.add('hidden');
+                    const profileControls = document.getElementById('userProfileControls');
+                    profileControls.classList.remove('hidden');
+                    profileControls.classList.add('flex');
+                    document.getElementById('loggedInUser').innerText = data.username;
+                    closeLogin();
+                    showToast("Account created successfully!", "success");
+                } else {
+                    showToast(data.error || "Registration failed", "error");
+                }
+            } catch(e) {
+                console.error(e);
+                showToast("Error connecting to server", "error");
+            }
+        }
+
+        async function logout() {
+            try {
+                const res = await fetch('http://127.0.0.1:8000/api/logout/', {
+                    method: 'POST'
+                });
+                if(res.ok) {
+                    currentUserId = null;
+                    currentProfileId = null;
+                    localStorage.removeItem('user_id');
+                    localStorage.removeItem('username');
+                    localStorage.removeItem('profile_id');
+                    localStorage.removeItem('saved_resume_pdf');
+                    document.getElementById('loginBtn').classList.remove('hidden');
+                    const profileControls = document.getElementById('userProfileControls');
+                    profileControls.classList.add('hidden');
+                    profileControls.classList.remove('flex');
+                    document.getElementById('loggedInUser').innerText = "";
+                    showToast("Successfully logged out!", "success");
+                    
+                    // Reset fields if needed
+                    document.getElementById('page-title').innerText = "Welcome, Student";
+                    document.getElementById('targetRole').innerText = "N/A";
+                    document.getElementById('readinessScore').innerText = "0%";
+                    document.getElementById('skillsTableBody').innerHTML = "";
+                    document.getElementById('opportunitiesContainer').innerHTML = "<p class='text-gray-500'>Upload your resume to see recommended opportunities.</p>";
+                }
+            } catch(e) {
+                console.error(e);
+                showToast("Error during logout", "error");
             }
         }
 
@@ -273,6 +541,21 @@
             const formData = new FormData();
             formData.append('resume', input.files[0]);
 
+            // Save PDF to localStorage and display preview
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const base64PDF = e.target.result;
+                try {
+                    localStorage.setItem('saved_resume_pdf', base64PDF);
+                } catch(e) {
+                    console.warn("PDF too large for localStorage.");
+                }
+                document.getElementById('resumePreviewFrame').src = base64PDF;
+                document.getElementById('resumePreviewFrame').classList.remove('hidden');
+                document.getElementById('resumePlaceholder').classList.add('hidden');
+            };
+            reader.readAsDataURL(input.files[0]);
+
             try {
                 const response = await fetch('http://127.0.0.1:8000/api/upload-resume/', {
                     method: 'POST',
@@ -282,6 +565,7 @@
                 if (!response.ok) throw new Error(data.error || "Failed to process resume.");
 
                 currentProfileId = data.profile_id;
+                localStorage.setItem('profile_id', data.profile_id);
                 document.getElementById('page-title').innerText = `Welcome, ${data.full_name}`;
                 document.getElementById('targetRole').innerText = data.target_role;
                 document.getElementById('readinessScore').innerText = `${data.readiness_score}%`;
@@ -317,7 +601,7 @@
 
             } catch (err) {
                 console.error("Upload error:", err);
-                alert("Upload Exception: " + err.message);
+                showToast("Upload Exception: " + err.message, "error");
             } finally {
                 btn.innerHTML = originalText;
                 btn.disabled = false;

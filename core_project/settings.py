@@ -85,6 +85,8 @@ CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = TIME_ZONE
+# CELERY_TASK_ALWAYS_EAGER = True  # Ensure tasks run synchronously without Redis
+CELERY_TASK_ALWAYS_EAGER = False  # Ensure tasks run asynchronously with Redis
 
 REST_FRAMEWORK = {
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',

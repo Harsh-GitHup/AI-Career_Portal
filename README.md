@@ -32,19 +32,28 @@ Then follow the setup instructions for the selected frontend, backend, and datab
 If the application uses external services, create an environment file and add the required credentials:
 
 ```env
-AI_API_KEY=your_api_key
-DATABASE_URL=your_database_url
+GOOGLE_API_KEY=your_gemini_api_key
+REDIS_URL=redis://127.0.0.1:6379/0
+ADZUNA_APP_ID=your_adzuna_app_id
+ADZUNA_APP_KEY=your_adzuna_app_key
+YOUTUBE_API_KEY=your_youtube_api_key
 ```
 
 Do not commit secrets or production credentials to the repository.
 
 ## Development
 
-Run the development server with the project’s configured start command, for example:
+Run the development server using `uv`:
 
 ```bash
-npm install
-npm run dev
+uv sync
+uv run manage.py migrate
+uv run manage.py runserver
+```
+
+You will also need to start the Celery worker for background scraping tasks:
+```bash
+uv run celery -A core_project worker --loglevel=info -P solo
 ```
 
 ## Contributing
