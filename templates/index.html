@@ -3,17 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CareerAI MP - Career Intelligence Platform</title>
+    <title>CareerAI - Career Intelligence Platform</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <style>
-        .active-tab { background-color: #e0e7ff; color: #3730a3; font-weight: 600; border-right: 4px solid #4f46e5; }
-        .chat-window { transition: transform 0.3s ease-in-out; }
-        .toast-enter { transform: translateY(100%); opacity: 0; }
-        .toast-enter-active { transform: translateY(0); opacity: 1; transition: all 0.3s ease-out; }
-        .toast-exit { transform: translateY(0); opacity: 1; }
-        .toast-exit-active { transform: translateY(100%); opacity: 0; transition: all 0.3s ease-in; }
-    </style>
+    <link rel="stylesheet" href="static/css/style.css">
 </head>
 <body class="bg-gray-50 text-gray-800 flex h-screen overflow-hidden relative">
 
@@ -83,9 +77,11 @@
     <!-- Sidebar -->
     <aside class="w-64 bg-white border-r border-gray-200 flex flex-col justify-between hidden md:flex">
         <div>
-            <div class="p-6 border-b border-gray-100 flex items-center space-x-2">
-                <i class="fa-solid fa-graduation-cap text-indigo-600 text-2xl"></i>
-                <h1 class="text-xl font-bold text-gray-900 tracking-tight">CareerAI <span class="text-indigo-600">MP</span></h1>
+            <div class="p-6 border-b border-gray-100 flex items-center space-x-3">
+                <div class="bg-indigo-600 p-2 rounded-lg shadow-md shadow-indigo-200">
+                    <i class="fa-solid fa-graduation-cap text-white text-xl"></i>
+                </div>
+                <h1 class="text-xl font-extrabold text-gray-900 tracking-tight">Career<span class="text-indigo-600">AI</span></h1>
             </div>
             <nav class="mt-4 flex flex-col space-y-1">
                 <button onclick="switchTab('dashboard')" id="tab-dashboard" class="tab-btn flex items-center px-6 py-3 text-sm text-gray-600 hover:bg-gray-50 text-left active-tab w-full">
@@ -99,6 +95,9 @@
                 </button>
                 <button onclick="switchTab('opportunities')" id="tab-opportunities" class="tab-btn flex items-center px-6 py-3 text-sm text-gray-600 hover:bg-gray-50 text-left w-full">
                     <i class="fa-solid fa-globe mr-3 w-5"></i> Opportunity Hub
+                </button>
+                <button onclick="switchTab('saved')" id="tab-saved" class="tab-btn flex items-center px-6 py-3 text-sm text-gray-600 hover:bg-gray-50 text-left w-full hidden">
+                    <i class="fa-solid fa-bookmark mr-3 w-5"></i> Saved Matches
                 </button>
             </nav>
         </div>
@@ -115,7 +114,7 @@
                     Logout
                 </button>
             </div>
-            <div class="text-xs text-gray-400 text-center">Madhya Pradesh Career Portal &copy; 2026</div>
+            <div class="text-xs text-gray-400 text-center font-medium">AI Career Portal &copy; 2026</div>
         </div>
     </aside>
 
@@ -127,7 +126,7 @@
                 <button class="md:hidden mr-4 text-gray-600" onclick="document.querySelector('aside').classList.toggle('hidden')">
                     <i class="fa-solid fa-bars text-xl"></i>
                 </button>
-                <h2 id="page-title" class="text-lg font-semibold text-gray-800">Welcome, Student</h2>
+                <h2 id="page-title" class="text-xl font-bold text-gray-800 bg-clip-text text-transparent bg-gradient-to-r from-gray-900 to-indigo-600">Welcome, Student</h2>
             </div>
             <div class="flex items-center space-x-2 md:space-x-4">
                 <input type="file" id="resumeInput" class="hidden" accept=".pdf" onchange="uploadResume()">
@@ -225,9 +224,6 @@
                         <input type="text" id="searchOpp" placeholder="Search..." class="border rounded px-3 py-1.5 text-sm w-48">
                         <select id="typeOpp" class="border rounded px-3 py-1.5 text-sm">
                             <option value="">All Types</option>
-                            <option value="Job">Jobs</option>
-                            <option value="Scheme">Schemes</option>
-                            <option value="Course">Courses</option>
                         </select>
                         <select id="sortOpp" class="border rounded px-3 py-1.5 text-sm">
                             <option value="-created_at">Newest First</option>
@@ -245,7 +241,36 @@
                     <!-- Pagination buttons -->
                 </div>
             </section>
+
+            <!-- 5. Saved Opportunities -->
+            <section id="section-saved" class="content-view hidden space-y-6">
+                <div class="mb-4">
+                    <h3 class="text-lg font-bold text-gray-900">Saved Matches</h3>
+                    <p class="text-sm text-gray-500">Your bookmarked AI-curated opportunities.</p>
+                </div>
+                
+                <div id="savedContainer" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <p class="text-sm text-gray-500">No saved matches yet. Bookmark opportunities to see them here.</p>
+                </div>
+            </section>
         </main>
+    </div>
+
+    <!-- Cover Letter Modal -->
+    <div id="coverLetterModal" class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center hidden">
+        <div class="bg-white p-6 md:p-8 rounded-xl shadow-lg w-11/12 md:w-3/4 lg:w-1/2 max-h-[90vh] flex flex-col">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xl font-bold text-gray-900">AI Cover Letter Generator</h3>
+                <button onclick="closeCoverLetterModal()" class="text-gray-500 hover:text-gray-700 text-2xl leading-none">&times;</button>
+            </div>
+            <div id="coverLetterContent" class="flex-1 overflow-y-auto bg-gray-50 p-6 rounded-lg border border-gray-200 text-sm text-gray-800 whitespace-pre-wrap font-serif leading-relaxed">
+                <!-- Cover letter content -->
+            </div>
+            <div class="mt-4 flex justify-end space-x-3">
+                <button onclick="copyCoverLetter()" class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded font-medium transition-colors"><i class="fa-regular fa-copy mr-2"></i>Copy Text</button>
+                <button onclick="closeCoverLetterModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded font-medium transition-colors">Done</button>
+            </div>
+        </div>
     </div>
 
     <!-- Chatbot Widget -->
@@ -270,404 +295,6 @@
         </div>
     </div>
 
-    <!-- JavaScript Controller -->
-    <script>
-        let currentProfileId = localStorage.getItem('profile_id');
-        let currentUserId = localStorage.getItem('user_id');
-        let currentPage = 1;
-
-        window.onload = () => {
-            const savedUsername = localStorage.getItem('username');
-            if (currentUserId && savedUsername) {
-                document.getElementById('loginBtn').classList.add('hidden');
-                const profileControls = document.getElementById('userProfileControls');
-                profileControls.classList.remove('hidden');
-                profileControls.classList.add('flex');
-                document.getElementById('loggedInUser').innerText = savedUsername;
-            }
-            
-            const savedPdf = localStorage.getItem('saved_resume_pdf');
-            if (savedPdf) {
-                document.getElementById('resumePreviewFrame').src = savedPdf;
-                document.getElementById('resumePreviewFrame').classList.remove('hidden');
-                document.getElementById('resumePlaceholder').classList.add('hidden');
-            }
-        };
-
-        function showToast(message, type = 'success') {
-            const container = document.getElementById('toastContainer');
-            const toast = document.createElement('div');
-            
-            // Base styles
-            toast.className = `toast-enter min-w-[300px] px-6 py-3 rounded-lg shadow-lg flex items-center justify-between pointer-events-auto border-l-4`;
-            
-            // Type-specific styles
-            if (type === 'success') {
-                toast.classList.add('bg-white', 'border-emerald-500', 'text-gray-800');
-                toast.innerHTML = `<div class="flex items-center"><i class="fa-solid fa-circle-check text-emerald-500 mr-3 text-lg"></i><span class="font-medium">${message}</span></div>`;
-            } else if (type === 'error') {
-                toast.classList.add('bg-white', 'border-red-500', 'text-gray-800');
-                toast.innerHTML = `<div class="flex items-center"><i class="fa-solid fa-circle-exclamation text-red-500 mr-3 text-lg"></i><span class="font-medium">${message}</span></div>`;
-            } else {
-                toast.classList.add('bg-gray-800', 'border-gray-600', 'text-white');
-                toast.innerHTML = `<div class="flex items-center"><i class="fa-solid fa-bell text-gray-300 mr-3 text-lg"></i><span class="font-medium">${message}</span></div>`;
-            }
-
-            container.appendChild(toast);
-            
-            // Trigger animation
-            requestAnimationFrame(() => {
-                toast.classList.remove('toast-enter');
-                toast.classList.add('toast-enter-active');
-            });
-
-            // Remove after 3 seconds
-            setTimeout(() => {
-                toast.classList.remove('toast-enter-active');
-                toast.classList.add('toast-exit-active');
-                setTimeout(() => toast.remove(), 500);
-            }, 5000);
-        }
-
-        function switchTab(tabKey) {
-            document.querySelectorAll('.content-view').forEach(el => el.classList.add('hidden'));
-            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active-tab'));
-            
-            document.getElementById(`section-${tabKey}`).classList.remove('hidden');
-            document.getElementById(`tab-${tabKey}`).classList.add('active-tab');
-            
-            if(tabKey === 'opportunities') fetchOpportunities();
-        }
-
-        function showLogin() {
-            document.getElementById('loginModal').classList.remove('hidden');
-        }
-        function closeLogin() {
-            document.getElementById('loginModal').classList.add('hidden');
-        }
-        
-        async function socialLogin() {
-            try {
-                const res = await fetch('http://127.0.0.1:8000/api/social-login/', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({email: 'student@example.com', name: 'Student'})
-                });
-                const data = await res.json();
-                if(res.ok) {
-                    currentUserId = data.user_id;
-                    localStorage.setItem('user_id', data.user_id);
-                    localStorage.setItem('username', data.username || "Student");
-                    document.getElementById('loginBtn').classList.add('hidden');
-                    const profileControls = document.getElementById('userProfileControls');
-                    profileControls.classList.remove('hidden');
-                    profileControls.classList.add('flex');
-                    document.getElementById('loggedInUser').innerText = data.username || "Student";
-                    closeLogin();
-                    showToast("Successfully logged in via Google!", "success");
-                }
-            } catch(e) {
-                console.error(e);
-                showToast("Connection error", "error");
-            }
-        }
-
-        async function standardLogin() {
-            const username = document.getElementById('loginUsername').value;
-            const password = document.getElementById('loginPassword').value;
-            
-            if(!username || !password) {
-                showToast("Please enter username and password", "error");
-                return;
-            }
-
-            try {
-                const res = await fetch('http://127.0.0.1:8000/api/login/', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({username, password})
-                });
-                const data = await res.json();
-                if(res.ok) {
-                    currentUserId = data.user_id;
-                    localStorage.setItem('user_id', data.user_id);
-                    localStorage.setItem('username', data.username);
-                    document.getElementById('loginBtn').classList.add('hidden');
-                    const profileControls = document.getElementById('userProfileControls');
-                    profileControls.classList.remove('hidden');
-                    profileControls.classList.add('flex');
-                    document.getElementById('loggedInUser').innerText = data.username;
-                    closeLogin();
-                    showToast("Successfully logged in!", "success");
-                } else {
-                    showToast(data.error || "Login failed", "error");
-                }
-            } catch(e) {
-                console.error(e);
-                showToast("Error connecting to server", "error");
-            }
-        }
-
-        function toggleAuth(mode) {
-            const loginForm = document.getElementById('loginFormContainer');
-            const registerForm = document.getElementById('registerFormContainer');
-            const tabLogin = document.getElementById('tabLogin');
-            const tabRegister = document.getElementById('tabRegister');
-            
-            if (mode === 'login') {
-                loginForm.classList.remove('hidden');
-                registerForm.classList.add('hidden');
-                tabLogin.classList.add('border-indigo-600', 'text-indigo-600');
-                tabLogin.classList.remove('border-transparent', 'text-gray-500');
-                tabRegister.classList.remove('border-indigo-600', 'text-indigo-600');
-                tabRegister.classList.add('border-transparent', 'text-gray-500');
-            } else {
-                loginForm.classList.add('hidden');
-                registerForm.classList.remove('hidden');
-                tabRegister.classList.add('border-indigo-600', 'text-indigo-600');
-                tabRegister.classList.remove('border-transparent', 'text-gray-500');
-                tabLogin.classList.remove('border-indigo-600', 'text-indigo-600');
-                tabLogin.classList.add('border-transparent', 'text-gray-500');
-            }
-        }
-
-        async function standardRegister() {
-            const username = document.getElementById('registerUsername').value;
-            const email = document.getElementById('registerEmail').value;
-            const password = document.getElementById('registerPassword').value;
-            
-            if(!username || !password) {
-                showToast("Please enter username and password", "error");
-                return;
-            }
-
-            try {
-                const res = await fetch('http://127.0.0.1:8000/api/register/', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({username, email, password})
-                });
-                const data = await res.json();
-                if(res.ok) {
-                    currentUserId = data.user_id;
-                    localStorage.setItem('user_id', data.user_id);
-                    localStorage.setItem('username', data.username);
-                    document.getElementById('loginBtn').classList.add('hidden');
-                    const profileControls = document.getElementById('userProfileControls');
-                    profileControls.classList.remove('hidden');
-                    profileControls.classList.add('flex');
-                    document.getElementById('loggedInUser').innerText = data.username;
-                    closeLogin();
-                    showToast("Account created successfully!", "success");
-                } else {
-                    showToast(data.error || "Registration failed", "error");
-                }
-            } catch(e) {
-                console.error(e);
-                showToast("Error connecting to server", "error");
-            }
-        }
-
-        async function logout() {
-            try {
-                const res = await fetch('http://127.0.0.1:8000/api/logout/', {
-                    method: 'POST'
-                });
-                if(res.ok) {
-                    currentUserId = null;
-                    currentProfileId = null;
-                    localStorage.removeItem('user_id');
-                    localStorage.removeItem('username');
-                    localStorage.removeItem('profile_id');
-                    localStorage.removeItem('saved_resume_pdf');
-                    document.getElementById('loginBtn').classList.remove('hidden');
-                    const profileControls = document.getElementById('userProfileControls');
-                    profileControls.classList.add('hidden');
-                    profileControls.classList.remove('flex');
-                    document.getElementById('loggedInUser').innerText = "";
-                    showToast("Successfully logged out!", "success");
-                    
-                    // Reset fields if needed
-                    document.getElementById('page-title').innerText = "Welcome, Student";
-                    document.getElementById('targetRole').innerText = "N/A";
-                    document.getElementById('readinessScore').innerText = "0%";
-                    document.getElementById('skillsTableBody').innerHTML = "";
-                    document.getElementById('opportunitiesContainer').innerHTML = "<p class='text-gray-500'>Upload your resume to see recommended opportunities.</p>";
-                }
-            } catch(e) {
-                console.error(e);
-                showToast("Error during logout", "error");
-            }
-        }
-
-        function toggleChat() {
-            const chat = document.getElementById('chatWindow');
-            chat.classList.toggle('hidden');
-        }
-
-        async function sendChat() {
-            const input = document.getElementById('chatInput');
-            const msg = input.value.trim();
-            if(!msg) return;
-            
-            const history = document.getElementById('chatHistory');
-            history.innerHTML += `<div class="bg-indigo-100 p-3 rounded-lg border border-indigo-200 w-3/4 ml-auto text-right shadow-sm mb-3">${msg}</div>`;
-            input.value = '';
-            history.scrollTop = history.scrollHeight;
-            
-            try {
-                const res = await fetch('http://127.0.0.1:8000/api/chatbot/', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({message: msg, profile_id: currentProfileId})
-                });
-                const data = await res.json();
-                history.innerHTML += `<div class="bg-white p-3 rounded-lg border border-gray-200 w-3/4 shadow-sm mb-3">${data.response}</div>`;
-                history.scrollTop = history.scrollHeight;
-            } catch (e) {
-                history.innerHTML += `<div class="bg-red-50 text-red-500 p-3 rounded-lg border w-3/4 shadow-sm mb-3">Error fetching response.</div>`;
-            }
-        }
-
-        async function uploadResume() {
-            const input = document.getElementById('resumeInput');
-            if (!input.files || input.files.length === 0) return;
-
-            const btn = document.getElementById('uploadBtn');
-            const originalText = btn.innerHTML;
-            btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i><span class="hidden md:inline">Analyzing...</span>`;
-            btn.disabled = true;
-
-            const formData = new FormData();
-            formData.append('resume', input.files[0]);
-
-            // Save PDF to localStorage and display preview
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                const base64PDF = e.target.result;
-                try {
-                    localStorage.setItem('saved_resume_pdf', base64PDF);
-                } catch(e) {
-                    console.warn("PDF too large for localStorage.");
-                }
-                document.getElementById('resumePreviewFrame').src = base64PDF;
-                document.getElementById('resumePreviewFrame').classList.remove('hidden');
-                document.getElementById('resumePlaceholder').classList.add('hidden');
-            };
-            reader.readAsDataURL(input.files[0]);
-
-            try {
-                const response = await fetch('http://127.0.0.1:8000/api/upload-resume/', {
-                    method: 'POST',
-                    body: formData
-                });
-                const data = await response.json();
-                if (!response.ok) throw new Error(data.error || "Failed to process resume.");
-
-                currentProfileId = data.profile_id;
-                localStorage.setItem('profile_id', data.profile_id);
-                document.getElementById('page-title').innerText = `Welcome, ${data.full_name}`;
-                document.getElementById('targetRole').innerText = data.target_role;
-                document.getElementById('readinessScore').innerText = `${data.readiness_score}%`;
-
-                // Render Skills Table
-                const tbody = document.getElementById('skillsTableBody');
-                tbody.innerHTML = '';
-
-                data.extracted_skills.forEach(skill => {
-                    tbody.innerHTML += `<tr><td class="py-4 px-6">${skill}</td><td class="py-4 px-6"><span class="px-2.5 py-1 text-xs rounded-full bg-emerald-100 text-emerald-700">Proficient</span></td><td class="py-4 px-6">Ready</td></tr>`;
-                });
-                data.skill_gaps.forEach((gap, idx) => {
-                    const course = data.recommended_courses[idx] || "Search SWAYAM";
-                    tbody.innerHTML += `<tr><td class="py-4 px-6">${gap}</td><td class="py-4 px-6"><span class="px-2.5 py-1 text-xs rounded-full bg-rose-100 text-rose-700">Missing</span></td><td class="py-4 px-6">Complete: <strong>${course}</strong></td></tr>`;
-                });
-
-                // Populate AI Resume Builder
-                const tipsList = document.getElementById('resumeTipsContainer');
-                tipsList.innerHTML = '';
-                data.resume_improvements.forEach(tip => {
-                    tipsList.innerHTML += `<li class="p-4 bg-indigo-50 border-l-4 border-indigo-500 text-sm text-indigo-900 rounded-r-lg font-medium">${tip}</li>`;
-                });
-
-                // Populate Mock Interview Questions
-                const interviewContainer = document.getElementById('interviewQuestionsContainer');
-                interviewContainer.innerHTML = '';
-                data.interview_questions.forEach((q, idx) => {
-                    interviewContainer.innerHTML += `<div class="p-4 bg-gray-50 border border-gray-200 rounded-lg"><span class="text-xs font-bold text-indigo-600">Question ${idx + 1}</span><p class="text-sm font-semibold mt-1">${q}</p></div>`;
-                });
-
-                // Fetch Matched Schemes & Catalog
-                fetchRecommendations(currentProfileId);
-
-            } catch (err) {
-                console.error("Upload error:", err);
-                showToast("Upload Exception: " + err.message, "error");
-            } finally {
-                btn.innerHTML = originalText;
-                btn.disabled = false;
-            }
-        }
-
-        async function fetchOpportunities(page = 1) {
-            currentPage = page;
-            const search = document.getElementById('searchOpp').value;
-            const type = document.getElementById('typeOpp').value;
-            const sort = document.getElementById('sortOpp').value;
-            
-            let url = `http://127.0.0.1:8000/api/opportunities/?page=${page}&ordering=${sort}`;
-            if(search) url += `&search=${search}`;
-            if(type) url += `&type=${type}`;
-            
-            try {
-                const res = await fetch(url);
-                const data = await res.json();
-                
-                const container = document.getElementById('schemesContainer');
-                container.innerHTML = '';
-                
-                let results = data.results || data; // handle pagination object or direct list
-                
-                if (results.length === 0) {
-                    container.innerHTML = `<p class="text-sm text-gray-500 col-span-2">No opportunities found.</p>`;
-                    return;
-                }
-
-                results.forEach(opp => {
-                    container.innerHTML += `
-                        <div class="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex flex-col justify-between hover:border-indigo-300 transition-all">
-                            <div>
-                                <div class="flex justify-between items-start mb-2">
-                                    <span class="px-2.5 py-1 text-xs font-semibold rounded-full ${opp.is_free ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}">${opp.stipend_or_cost}</span>
-                                    <span class="text-xs font-bold text-gray-500">${opp.opportunity_type}</span>
-                                </div>
-                                <h4 class="text-base font-bold text-gray-900">${opp.title}</h4>
-                                <p class="text-xs text-gray-400 mb-2">${opp.provider} &bull; ${opp.mode} (${opp.location})</p>
-                                <p class="text-sm text-gray-600 mb-3">${opp.description.substring(0,100)}...</p>
-                            </div>
-                            <div class="pt-4 border-t border-gray-100 flex justify-between items-center">
-                                <a href="${opp.url}" target="_blank" class="bg-gray-900 hover:bg-black text-white text-xs font-semibold px-4 py-2 rounded-lg transition-colors">Apply Directly &rarr;</a>
-                            </div>
-                        </div>
-                    `;
-                });
-                
-                // Pagination controls
-                const pag = document.getElementById('paginationControls');
-                pag.innerHTML = '';
-                if(data.previous) {
-                    pag.innerHTML += `<button onclick="fetchOpportunities(${page - 1})" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 text-sm">Previous</button>`;
-                }
-                if(data.next) {
-                    pag.innerHTML += `<button onclick="fetchOpportunities(${page + 1})" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 text-sm">Next</button>`;
-                }
-            } catch(e) {
-                console.error(e);
-            }
-        }
-
-        async function fetchRecommendations(profileId) {
-            // Placeholder for recommendations rendering
-        }
-    </script>
+    <script src="static/js/app.js"></script>
 </body>
 </html>
