@@ -37,10 +37,28 @@ class CareerAppTests(TestCase):
         self.assertGreaterEqual(len(response.data['results']), 1)
 
     def test_recommendations_api(self):
-        response = self.client.get(f'/api/recommendations/{self.profile.id}/')
+        self.client.force_authenticate(user=self.user)
+        response = self.client.get(f'/api/recommendations/')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn("opportunities", response.data)
         self.assertEqual(len(response.data["opportunities"]), 1)
+        
+    def test_profile_unauthenticated(self):
+        # Should block access to profiles without auth
+        response = self.client.get('/api/profiles/')
+        self.assertIn(response.status_code, [status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN])
+        
+    def test_toggle_bookmark(self):
+        self.client.force_authenticate(user=self.user)
+        match = ProfileMatch.objects.first()
+        response = self.client.post(f'/api/bookmark/{match.id}/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data['is_bookmarked'])
+        
+    def test_social_login_invalid_token(self):
+        response = self.client.post('/api/social-login/', {'token': 'invalid_token'}, format='json')
+        # Google Auth will throw ValueError for 'invalid_token'
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
     @patch('career_app.views.analyze_resume')
     @patch('career_app.tasks.run_universal_scraper.delay')
