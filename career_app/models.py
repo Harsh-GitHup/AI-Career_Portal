@@ -10,6 +10,8 @@ class StudentProfile(models.Model):
     skill_gaps = models.JSONField(default=list, help_text="List of missing skills for target role")
     resume_improvements = models.JSONField(default=list, help_text="Actionable formatting/content suggestions")
     interview_questions = models.JSONField(default=list, help_text="Tailored mock interview questions")
+    projects = models.JSONField(default=list, help_text="List of extracted project details")
+    experience = models.JSONField(default=list, help_text="List of extracted work experience")
     readiness_score = models.IntegerField(default=50)
     employability_score = models.IntegerField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -30,27 +32,13 @@ class AcademicRecord(models.Model):
 
 
 class Opportunity(models.Model):
-    TYPE_CHOICES = [
-        ('Scheme', 'Government Scheme'),
-        ('Course', 'Free/Paid Course'),
-        ('Internship', 'Internship'),
-        ('Job', 'Job Opening'),
-        ('Hackathon', 'Hackathon/Contest'),
-        ('Certification', 'Certification Program'),
-    ]
-    MODE_CHOICES = [
-        ('Online', 'Online'),
-        ('Offline', 'Offline'),
-        ('Hybrid', 'Hybrid'),
-    ]
-
     dedupe_hash = models.CharField(max_length=64, unique=True, db_index=True)
     title = models.CharField(max_length=500)
     provider = models.CharField(max_length=255, db_index=True)
-    opportunity_type = models.CharField(max_length=30, choices=TYPE_CHOICES, db_index=True)
+    opportunity_type = models.CharField(max_length=100, db_index=True, help_text="e.g., Job, Internship, Scheme, Fellowship")
     is_free = models.BooleanField(default=True, db_index=True)
     stipend_or_cost = models.CharField(max_length=100, blank=True, default="Free")
-    mode = models.CharField(max_length=20, choices=MODE_CHOICES, default='Online')
+    mode = models.CharField(max_length=50, default='Online')
     location = models.CharField(max_length=255, default="Pan-India", db_index=True)
     deadline = models.DateField(null=True, blank=True, db_index=True)
     url = models.URLField(max_length=1000)
@@ -89,6 +77,7 @@ class ProfileMatch(models.Model):
     matching_skills = models.JSONField(default=list)
     reasoning = models.TextField(blank=True)
     is_bookmarked = models.BooleanField(default=False)
+    cover_letter = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -97,3 +86,50 @@ class ProfileMatch(models.Model):
 
     def __str__(self):
         return f"{self.profile.full_name} <-> {self.opportunity.title} ({self.relevance_score}%)"
+
+class CareerRole(models.Model):
+    title = models.CharField(max_length=255, unique=True, db_index=True)
+    description = models.TextField(blank=True)
+    
+    def __str__(self):
+        return self.title
+
+class RoleSkill(models.Model):
+    role = models.ForeignKey(CareerRole, on_delete=models.CASCADE, related_name='skills')
+    skill_name = models.CharField(max_length=100)
+
+    def __str__(self):
+        return f"{self.skill_name} ({self.role.title})"
+
+class CourseRecommendation(models.Model):
+    skill_name = models.CharField(max_length=100, db_index=True)
+    course_title = models.CharField(max_length=255)
+    url = models.URLField(max_length=1000, blank=True)
+    provider = models.CharField(max_length=255, blank=True)
+
+    def __str__(self):
+        return f"{self.skill_name} -> {self.course_title}"
+
+class InterviewQuestion(models.Model):
+    role = models.ForeignKey(CareerRole, on_delete=models.CASCADE, related_name='questions')
+    question_text = models.TextField()
+
+    def __str__(self):
+        return f"{self.role.title} - {self.question_text[:30]}..."
+
+class ResumeAnalysis(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='resume_analyses')
+    resume_file = models.FileField(upload_to='resumes/', null=True, blank=True)
+    target_role = models.CharField(max_length=255, blank=True)
+    current_skills = models.JSONField(default=list)
+    skill_gaps = models.JSONField(default=list)
+    resume_improvements = models.JSONField(default=list)
+    interview_questions = models.JSONField(default=list)
+    interview_feedbacks = models.JSONField(default=dict)
+    projects = models.JSONField(default=list)
+    experience = models.JSONField(default=list)
+    readiness_score = models.IntegerField(default=50)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Analysis for {self.user.username} - {self.created_at.strftime('%Y-%m-%d %H:%M')}"
