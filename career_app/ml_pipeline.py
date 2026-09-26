@@ -1,11 +1,14 @@
 import os
 import tempfile
+import logging
 from typing import List
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_community.document_loaders import PyPDFLoader
+from .local_nlp import LocalNLPResumeParser
 
+logger = logging.getLogger(__name__)
 load_dotenv()
 
 class ResumeAnalysis(BaseModel):
@@ -16,9 +19,13 @@ class ResumeAnalysis(BaseModel):
     recommended_courses: List[str] = Field(description="Direct names of government or university certified courses")
     resume_improvements: List[str] = Field(description="3 actionable, specific bullet suggestions to improve resume presentation")
     interview_questions: List[str] = Field(description="5 technical and behavioral interview questions tailored to the resume")
+    summary: str = Field(default="", description="A short professional summary of the candidate")
+    projects: List[str] = Field(default=[], description="List of projects mentioned in the resume")
+    experience: List[str] = Field(default=[], description="List of work experiences or internships")
+    academic_records: List[dict] = Field(default=[], description="List of dicts containing degree, institution, graduation_year, and cgpa")
 
 def analyze_resume(uploaded_file_bytes: bytes) -> ResumeAnalysis:
-    """Safely extracts text from uploaded PDF bytes and prompts Gemini for structured analysis."""
+    """Safely extracts text from uploaded PDF bytes and prompts Gemini for structured analysis. Fallbacks to local NLP model."""
     temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
     try:
         temp_file.write(uploaded_file_bytes)
@@ -32,34 +39,77 @@ def analyze_resume(uploaded_file_bytes: bytes) -> ResumeAnalysis:
             os.remove(temp_file.name)
 
     api_key = os.getenv("GOOGLE_API_KEY")
-    if not api_key:
-        raise ValueError("GOOGLE_API_KEY environment variable is missing in .env")
 
-    model_name = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+    if api_key:
+        try:
+            model_name = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
+            llm = ChatGoogleGenerativeAI(
+                model=model_name,
+                google_api_key=api_key,
+                temperature=0.1,
+                max_retries=3  # Allow some retries for 503/429 before falling back
+            )
+            structured_llm = llm.with_structured_output(ResumeAnalysis)
+            prompt = f"""
+            Analyze the following resume text strictly and return clean structured data.
+            1. Detect the candidate's name or assign 'Student'.
+            2. Determine the top 3 best matching job titles/professions.
+            3. Extract all explicit skills demonstrated in the projects and experience sections.
+            4. Detect 4 to 6 critical industry skill gaps needed to succeed in their primary target role.
+            5. Suggest actual SWAYAM/NPTEL certified courses for those gaps.
+            6. Provide 3 high-impact resume enhancement recommendations.
+            7. Provide 5 realistic interview practice questions.
+            8. Extract a short professional summary.
+            9. Extract all project details.
+            10. Extract all work experience.
+            11. Extract all academic records (degree, institution, graduation_year, cgpa).
 
-    llm = ChatGoogleGenerativeAI(
-        model="gemini-1.5-flash-latest",
-        google_api_key=api_key,
-        temperature=0.1
+            Resume Content:
+            {resume_text}
+            """
+            return structured_llm.invoke(prompt)
+        except Exception as e:
+            logger.warning(f"LLM API Error (falling back to local parser): {e}")
+
+    # --- FALLBACK: Use the custom local model instead of the API ---
+    logger.info("Using LocalNLPResumeParser fallback.")
+    model = LocalNLPResumeParser(resume_text)
+    
+    name = model.extract_name()
+    skills = model.extract_skills()
+    roles = model.determine_roles(skills)
+    
+    gaps, courses, questions = [], [], []
+    for role in roles:
+        r_gaps, r_courses = model.find_gaps_and_courses(role, skills)
+        gaps.extend(r_gaps)
+        courses.extend(r_courses)
+        questions.extend(model.generate_interview_qs(role))
+        
+    gaps = list(dict.fromkeys(gaps))[:5]
+    courses = list(dict.fromkeys(courses))[:5]
+    questions = list(dict.fromkeys(questions))[:5]
+    
+    improvements = model.get_improvements(gaps)
+
+    summary = model.extract_summary()
+    projects = model.extract_projects()
+    experience = model.extract_experience()
+    academics = model.extract_academic_records()
+
+    return ResumeAnalysis(
+        full_name=name,
+        target_professions=roles,
+        extracted_skills=skills,
+        skill_gaps=gaps,
+        recommended_courses=courses,
+        resume_improvements=improvements,
+        interview_questions=questions,
+        summary=summary,
+        projects=projects,
+        experience=experience,
+        academic_records=academics
     )
-
-    structured_llm = llm.with_structured_output(ResumeAnalysis)
-
-    prompt = f"""
-    Analyze the following resume text strictly and return clean structured data.
-    1. Detect the candidate's name or assign 'Student'.
-    2. Determine the top 3 best matching job titles/professions.
-    3. Extract all explicit skills demonstrated in the projects and experience sections.
-    4. Detect 4 to 6 critical industry skill gaps needed to succeed in their primary target role.
-    5. Suggest actual SWAYAM/NPTEL certified courses for those gaps.
-    6. Provide 3 high-impact resume enhancement recommendations.
-    7. Provide 5 realistic interview practice questions.
-
-    Resume Content:
-    {resume_text}
-    """
-
-    return structured_llm.invoke(prompt)
 
 def calculate_opportunity_relevance(candidate_skills: List[str], target_role: str, opportunity) -> tuple[float, List[str], str]:
     """Calculates relevance score based on skill overlap and target role keyword matching."""
