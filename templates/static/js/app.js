@@ -11,20 +11,74 @@ window.onload = () => {
         profileControls.classList.add('flex');
         document.getElementById('loggedInUser').innerText = savedUsername;
         document.getElementById('tab-saved').classList.remove('hidden');
+        document.getElementById('tab-history').classList.remove('hidden');
 
         // Dynamically fetch profile data
         fetchProfile();
-    }
-
-    const savedPdf = localStorage.getItem('saved_resume_pdf');
-    if (savedPdf) {
-        document.getElementById('resumePreviewFrame').src = savedPdf;
-        document.getElementById('resumePreviewFrame').classList.remove('hidden');
-        document.getElementById('resumePlaceholder').classList.add('hidden');
+        loadLatestResumePreview();
     }
 
     fetchDynamicTypes();
 };
+
+// loadLatestResumePreview has been removed to prevent fetching from history.
+// Preview will only show the most recently uploaded resume in the active session.
+async function renderPDF(source) {
+        document.getElementById('resumePlaceholder').classList.add('hidden');
+    const canvasWrapper = document.getElementById('resumePreviewCanvasWrapper');
+    if(!canvasWrapper) return;
+    canvasWrapper.classList.remove('hidden');
+    canvasWrapper.innerHTML = '<div class="text-white animate-pulse"><i class="fa-solid fa-spinner fa-spin mr-2"></i> Rendering PDF...</div>';
+
+    try {
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+        
+        let loadingTask;
+        if (typeof source === 'string') {
+            loadingTask = pdfjsLib.getDocument(source); // URL
+        } else {
+            loadingTask = pdfjsLib.getDocument({data: source}); // ArrayBuffer
+        }
+        
+        const pdf = await loadingTask.promise;
+        canvasWrapper.innerHTML = '';
+        
+        for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+            const page = await pdf.getPage(pageNum);
+            const containerWidth = document.getElementById('resumePreviewContainer').clientWidth || 400;
+            const unscaledViewport = page.getViewport({ scale: 1.0 });
+            const scale = (containerWidth - 40) / unscaledViewport.width; 
+            const viewport = page.getViewport({ scale: scale > 1.5 ? 1.5 : scale });
+            
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            
+            // Fix for blurry text on high DPI displays
+            const outputScale = window.devicePixelRatio || 1;
+            canvas.width = Math.floor(viewport.width * outputScale);
+            canvas.height = Math.floor(viewport.height * outputScale);
+            canvas.style.width = Math.floor(viewport.width) + "px";
+            canvas.style.height = Math.floor(viewport.height) + "px";
+            
+            canvas.className = 'rounded-lg shadow-md bg-white mb-4';
+            
+            const transform = outputScale !== 1 
+                ? [outputScale, 0, 0, outputScale, 0, 0] 
+                : null;
+                
+            const renderContext = { 
+                canvasContext: context, 
+                transform: transform,
+                viewport: viewport 
+            };
+            await page.render(renderContext).promise;
+            canvasWrapper.appendChild(canvas);
+        }
+    } catch (err) {
+        console.error("Error rendering PDF", err);
+        canvasWrapper.innerHTML = '<div class="text-rose-400">Failed to render PDF preview.</div>';
+    }
+}
 
 async function fetchProfile() {
     try {
@@ -79,7 +133,26 @@ function populateDashboard(profile) {
     const interviewContainer = document.getElementById('interviewQuestionsContainer');
     interviewContainer.innerHTML = '';
     (profile.interview_questions || []).forEach((q, idx) => {
-        interviewContainer.innerHTML += `<div class="p-5 bg-white border border-gray-100 shadow-sm rounded-xl hover:shadow-md transition-shadow"><span class="text-xs font-bold text-indigo-500 uppercase tracking-wider mb-2 block">Question ${idx + 1}</span><p class="text-sm font-semibold text-gray-800">${q}</p></div>`;
+        // Escape quotes so we can pass the string nicely to submitInterviewAnswer
+        const escapedQ = q.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+        interviewContainer.innerHTML += `
+            <div class="p-5 bg-white border border-gray-100 shadow-sm rounded-xl hover:shadow-md transition-shadow">
+                <span class="text-xs font-bold text-indigo-500 uppercase tracking-wider mb-2 block">Question ${idx + 1}</span>
+                <p class="text-sm font-semibold text-gray-800 mb-4">${q}</p>
+                <div class="flex flex-col space-y-3">
+                    <button id="btn-record-${idx}" onclick="toggleRecording(${idx})" class="w-fit bg-slate-50 hover:bg-rose-50 text-slate-600 hover:text-rose-600 border border-slate-200 hover:border-rose-200 px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center shadow-sm">
+                        <i id="icon-record-${idx}" class="fa-solid fa-microphone mr-2"></i> 
+                        <span id="text-record-${idx}">Record Answer</span>
+                    </button>
+                    <div id="transcript-container-${idx}" class="hidden bg-indigo-50/50 p-4 rounded-xl border border-indigo-100 relative">
+                        <p id="transcript-${idx}" class="text-sm text-slate-700 italic mb-3"></p>
+                        <button onclick="submitInterviewAnswer(${idx}, '${escapedQ}')" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-2 rounded-lg shadow-md transition-colors w-fit flex items-center">
+                            <i class="fa-solid fa-robot mr-2"></i> Evaluate
+                        </button>
+                    </div>
+                    <div id="feedback-container-${idx}" class="hidden p-4 rounded-xl text-sm font-medium leading-relaxed"></div>
+                </div>
+            </div>`;
     });
 }
 
@@ -96,11 +169,19 @@ async function fetchDynamicTypes() {
         if (res.ok) {
             const types = await res.json();
             const typeSelect = document.getElementById('typeOpp');
+            const savedTypeSelect = document.getElementById('savedTypeFilter');
             types.forEach(t => {
                 const opt = document.createElement('option');
                 opt.value = t;
                 opt.textContent = t;
                 typeSelect.appendChild(opt);
+                
+                if (savedTypeSelect) {
+                    const optSaved = document.createElement('option');
+                    optSaved.value = t;
+                    optSaved.textContent = t;
+                    savedTypeSelect.appendChild(optSaved);
+                }
             });
         }
     } catch (e) {
@@ -146,6 +227,7 @@ function switchTab(tabKey) {
 
     if (tabKey === 'opportunities') fetchOpportunities();
     if (tabKey === 'saved') fetchSavedOpportunities();
+    if (tabKey === 'history') fetchResumeHistory();
 }
 
 function showLogin() {
@@ -182,6 +264,7 @@ async function standardLogin() {
             localStorage.setItem('username', data.username);
             document.getElementById('loginBtn').classList.add('hidden');
             document.getElementById('tab-saved').classList.remove('hidden');
+            document.getElementById('tab-history').classList.remove('hidden');
             const profileControls = document.getElementById('userProfileControls');
             profileControls.classList.remove('hidden');
             profileControls.classList.add('flex');
@@ -245,6 +328,7 @@ async function standardRegister() {
             localStorage.setItem('username', data.username);
             document.getElementById('loginBtn').classList.add('hidden');
             document.getElementById('tab-saved').classList.remove('hidden');
+            document.getElementById('tab-history').classList.remove('hidden');
             const profileControls = document.getElementById('userProfileControls');
             profileControls.classList.remove('hidden');
             profileControls.classList.add('flex');
@@ -274,6 +358,7 @@ async function logout() {
             localStorage.removeItem('saved_resume_pdf');
             document.getElementById('loginBtn').classList.remove('hidden');
             document.getElementById('tab-saved').classList.add('hidden');
+            document.getElementById('tab-history').classList.add('hidden');
             const profileControls = document.getElementById('userProfileControls');
             profileControls.classList.add('hidden');
             profileControls.classList.remove('flex');
@@ -335,20 +420,16 @@ async function uploadResume() {
 
     const formData = new FormData();
     formData.append('resume', input.files[0]);
+    if (currentUserId) {
+        formData.append('user_id', currentUserId);
+    }
 
     const reader = new FileReader();
-    reader.onload = function (e) {
-        const base64PDF = e.target.result;
-        try {
-            localStorage.setItem('saved_resume_pdf', base64PDF);
-        } catch (e) {
-            console.warn("PDF too large for localStorage.");
-        }
-        document.getElementById('resumePreviewFrame').src = base64PDF;
-        document.getElementById('resumePreviewFrame').classList.remove('hidden');
-        document.getElementById('resumePlaceholder').classList.add('hidden');
+    reader.onload = async function (e) {
+        const arrayBuffer = e.target.result;
+        renderPDF(arrayBuffer);
     };
-    reader.readAsDataURL(input.files[0]);
+    reader.readAsArrayBuffer(input.files[0]);
 
     try {
         const response = await fetch(`${API_BASE_URL}/upload-resume/`, {
@@ -398,18 +479,22 @@ async function fetchOpportunities(page = 1) {
 
         results.forEach(opp => {
             container.innerHTML += `
-                        <div class="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-lg flex flex-col justify-between transition-all duration-300">
+                        <div class="bg-white p-6 md:p-8 rounded-3xl border border-gray-100 shadow-lg hover:shadow-xl flex flex-col justify-between transition-all duration-300 hover:-translate-y-1">
                             <div>
-                                <div class="flex justify-between items-start mb-3">
-                                    <span class="px-3 py-1 text-xs font-bold rounded-full ${opp.is_free ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}">${opp.stipend_or_cost}</span>
-                                    <span class="text-xs font-bold text-gray-400 uppercase tracking-wider">${opp.opportunity_type}</span>
+                                <div class="flex justify-between items-start mb-4">
+                                    <span class="px-3 py-1 text-[10px] font-black uppercase tracking-wider rounded-full ${opp.is_free ? 'bg-emerald-100/50 text-emerald-700' : 'bg-amber-100/50 text-amber-700'}">${opp.stipend_or_cost}</span>
+                                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">${opp.opportunity_type}</span>
                                 </div>
-                                <h4 class="text-lg font-bold text-gray-900 mb-1">${opp.title}</h4>
-                                <p class="text-xs text-indigo-500 font-semibold mb-3">${opp.provider} &bull; ${opp.mode} &bull; ${opp.location}</p>
-                                <p class="text-sm text-gray-600 mb-4 leading-relaxed">${opp.description.substring(0, 120)}...</p>
+                                <h4 class="text-xl font-extrabold text-slate-900 mb-2 leading-tight">${opp.title}</h4>
+                                <p class="text-xs text-indigo-500 font-bold mb-4 uppercase tracking-wide">${opp.provider} &bull; ${opp.mode} &bull; ${opp.location}</p>
+                                <p class="text-sm text-slate-500 font-medium mb-6 leading-relaxed">${opp.description.substring(0, 120)}...</p>
                             </div>
-                            <div class="pt-4 border-t border-gray-50 flex justify-between items-center">
-                                <a href="${opp.url}" target="_blank" class="w-full text-center bg-gray-900 hover:bg-indigo-600 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors shadow-md">Apply Now &rarr;</a>
+                            <div class="pt-5 border-t border-slate-50 flex justify-between items-center relative z-10">
+                                <button onclick="toggleBookmark(${opp.id}, this)" class="w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-300 shadow-sm text-slate-400 bg-white border border-slate-200 hover:text-rose-500 hover:border-rose-200 hover:bg-rose-50">
+                                    <i class="fa-regular fa-heart text-xl"></i>
+                                </button>
+                                ${opp.opportunity_type.toLowerCase() === 'job' || opp.opportunity_type.toLowerCase() === 'internship' ? `<button onclick="generateCoverLetter(${opp.id})" class="ml-3 flex-1 bg-white border border-indigo-100 hover:bg-indigo-50 text-indigo-600 text-sm font-bold px-3 py-3 rounded-xl transition-colors shadow-sm"><i class="fa-solid fa-pen-nib mr-2"></i> Cover Letter</button>` : ''}
+                                <a href="${opp.url}" target="_blank" class="flex-1 ml-3 text-center bg-gradient-to-r from-slate-800 to-slate-900 hover:from-indigo-600 hover:to-indigo-700 text-white text-sm font-bold px-4 py-3 rounded-xl transition-all duration-300 shadow-md hover:shadow-lg">Apply Now &rarr;</a>
                             </div>
                         </div>
                     `;
@@ -447,26 +532,30 @@ async function fetchRecommendations() {
             const score = match.relevance_score;
             const scoreColor = score >= 70 ? 'emerald' : score >= 40 ? 'amber' : 'gray';
             html += `
-                <div class="bg-gradient-to-br from-indigo-50 to-white p-6 rounded-2xl border-2 border-indigo-100 shadow-sm flex flex-col justify-between hover:shadow-lg hover:border-indigo-300 transition-all duration-300 relative overflow-hidden">
-                    <div class="absolute -right-4 -top-4 w-16 h-16 bg-indigo-100 rounded-full opacity-50 blur-xl"></div>
+                <div class="bg-white p-6 md:p-8 rounded-3xl border border-indigo-50 shadow-md flex flex-col justify-between hover:shadow-xl hover:border-indigo-100 transition-all duration-300 relative overflow-hidden hover:-translate-y-1">
+                    <div class="absolute -right-4 -top-4 w-32 h-32 bg-gradient-to-br from-indigo-400 to-purple-400 rounded-full opacity-10 blur-2xl pointer-events-none"></div>
                     <div class="relative z-10">
-                        <div class="flex justify-between items-start mb-3">
-                            <span class="px-3 py-1 text-xs font-bold rounded-full bg-${scoreColor}-100 text-${scoreColor}-800 shadow-sm"><i class="fa-solid fa-bolt mr-1"></i> Match: ${score}%</span>
-                            <span class="text-xs font-bold text-gray-400 uppercase tracking-wider">${opp.opportunity_type}</span>
+                        <div class="flex justify-between items-start mb-4">
+                            <span class="px-3 py-1 text-[10px] font-black rounded-full bg-${scoreColor}-100/80 text-${scoreColor}-700 shadow-sm uppercase tracking-widest"><i class="fa-solid fa-bolt mr-1"></i> Match: ${score}%</span>
+                            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">${opp.opportunity_type}</span>
                         </div>
-                        <h4 class="text-lg font-bold text-gray-900 mb-1">${opp.title}</h4>
-                        <p class="text-xs text-indigo-500 font-semibold mb-3">${opp.provider} &bull; ${opp.mode}</p>
-                        <p class="text-sm text-gray-600 mb-3 leading-relaxed">${(opp.description || '').substring(0, 100)}...</p>
-                        <div class="bg-white/80 p-3 rounded-lg border border-indigo-50 mb-4">
-                            <p class="text-xs text-indigo-700 italic font-medium">💡 ${match.reasoning}</p>
+                        <h4 class="text-xl font-extrabold text-slate-900 mb-2 leading-tight">${opp.title}</h4>
+                        <p class="text-xs text-indigo-500 font-bold mb-4 uppercase tracking-wide">${opp.provider} &bull; ${opp.mode}</p>
+                        <p class="text-sm text-slate-500 font-medium mb-4 leading-relaxed">${(opp.description || '').substring(0, 100)}...</p>
+                        <div class="bg-indigo-50/50 p-4 rounded-2xl border border-indigo-50 mb-6">
+                            <p class="text-xs text-indigo-700 italic font-semibold leading-relaxed">💡 ${match.reasoning}</p>
                         </div>
                     </div>
-                    <div class="pt-4 border-t border-indigo-50 flex justify-between items-center relative z-10">
-                        <button onclick="toggleBookmark(${match.id}, this)" class="w-10 h-10 rounded-full flex items-center justify-center transition-colors ${match.is_bookmarked ? 'text-rose-500 bg-rose-50 hover:bg-rose-100' : 'text-gray-400 bg-gray-50 hover:text-rose-500 hover:bg-rose-50'}">
-                            <i class="${match.is_bookmarked ? 'fa-solid' : 'fa-regular'} fa-heart text-lg"></i>
+                    <div class="pt-5 border-t border-indigo-50 flex justify-between items-center relative z-10">
+                        <button onclick="toggleBookmark(${opp.id}, this)" class="w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-300 shadow-sm ${match.is_bookmarked ? 'text-rose-500 bg-rose-50 hover:bg-rose-100 border border-rose-100' : 'text-slate-400 bg-white border border-slate-200 hover:text-rose-500 hover:border-rose-200 hover:bg-rose-50'}">
+                            <i class="${match.is_bookmarked ? 'fa-solid' : 'fa-regular'} fa-heart text-xl"></i>
                         </button>
-                        ${opp.opportunity_type.toLowerCase() === 'job' || opp.opportunity_type.toLowerCase() === 'internship' ? `<button onclick="generateCoverLetter(${match.id})" class="ml-2 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 text-sm font-semibold px-3 py-2 rounded-xl transition-colors"><i class="fa-solid fa-pen-nib mr-1"></i> Cover Letter</button>` : ''}
-                        <a href="${opp.url}" target="_blank" class="flex-1 text-center bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors shadow-md shadow-indigo-200 ml-2">View &rarr;</a>
+                        ${(opp.opportunity_type.toLowerCase() === 'job' || opp.opportunity_type.toLowerCase() === 'internship') ? 
+                            (match.cover_letter ? 
+                                `<button onclick="generateCoverLetter(${opp.id})" class="ml-3 flex-1 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 text-emerald-700 text-sm font-bold px-3 py-3 rounded-xl transition-colors shadow-sm"><i class="fa-solid fa-file-lines mr-2"></i> View Cover Letter</button>` : 
+                                `<button onclick="generateCoverLetter(${opp.id})" class="ml-3 flex-1 bg-white border border-indigo-100 hover:bg-indigo-50 text-indigo-600 text-sm font-bold px-3 py-3 rounded-xl transition-colors shadow-sm"><i class="fa-solid fa-pen-nib mr-2"></i> Cover Letter</button>`
+                            ) : ''}
+                        <a href="${opp.url}" target="_blank" class="flex-1 text-center bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-sm font-bold px-4 py-3 rounded-xl transition-all duration-300 shadow-md hover:shadow-lg ml-3">View &rarr;</a>
                     </div>
                 </div>`;
         });
@@ -485,7 +574,12 @@ async function fetchSavedOpportunities() {
         });
         if(!res.ok) return;
         const data = await res.json();
-        const allMatches = [...(data.schemes || []), ...(data.opportunities || [])].filter(m => m.is_bookmarked);
+        let allMatches = [...(data.schemes || []), ...(data.opportunities || [])].filter(m => m.is_bookmarked);
+
+        const filterValue = document.getElementById('savedTypeFilter')?.value;
+        if (filterValue) {
+            allMatches = allMatches.filter(m => m.opportunity.opportunity_type === filterValue);
+        }
 
         const container = document.getElementById('savedContainer');
         container.innerHTML = '';
@@ -498,19 +592,25 @@ async function fetchSavedOpportunities() {
         allMatches.forEach(match => {
             const opp = match.opportunity;
             container.innerHTML += `
-                <div class="bg-white p-6 rounded-xl border border-rose-100 shadow-sm hover:shadow-md flex flex-col justify-between transition-all duration-300">
-                    <div>
-                        <div class="flex justify-between items-start mb-3">
-                            <span class="px-3 py-1 text-xs font-bold rounded-full bg-emerald-100 text-emerald-800">${opp.stipend_or_cost}</span>
-                            <span class="text-xs font-bold text-gray-400 uppercase tracking-wider">${opp.opportunity_type}</span>
+                <div class="bg-white p-6 md:p-8 rounded-3xl border border-rose-50 shadow-md hover:shadow-xl flex flex-col justify-between transition-all duration-300 hover:-translate-y-1 relative overflow-hidden">
+                    <div class="absolute -right-8 -top-8 w-32 h-32 bg-rose-400 rounded-full opacity-5 blur-2xl pointer-events-none"></div>
+                    <div class="relative z-10">
+                        <div class="flex justify-between items-start mb-4">
+                            <span class="px-3 py-1 text-[10px] font-black uppercase tracking-wider rounded-full bg-emerald-100/50 text-emerald-700">${opp.stipend_or_cost}</span>
+                            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">${opp.opportunity_type}</span>
                         </div>
-                        <h4 class="text-lg font-bold text-gray-900 mb-1">${opp.title}</h4>
-                        <p class="text-xs text-indigo-500 font-semibold mb-3">${opp.provider}</p>
-                        <p class="text-sm text-gray-600 mb-4 leading-relaxed">${opp.description.substring(0, 120)}...</p>
+                        <h4 class="text-xl font-extrabold text-slate-900 mb-2 leading-tight">${opp.title}</h4>
+                        <p class="text-xs text-indigo-500 font-bold mb-4 uppercase tracking-wide">${opp.provider}</p>
+                        <p class="text-sm text-slate-500 font-medium mb-6 leading-relaxed">${opp.description.substring(0, 120)}...</p>
                     </div>
-                    <div class="pt-4 border-t border-gray-50 flex justify-between items-center">
-                        <button onclick="toggleBookmark(${match.id}, this)" class="text-rose-500 hover:text-gray-400 text-sm font-semibold px-3 py-2 transition-colors"><i class="fa-solid fa-heart mr-1"></i> Unsave</button>
-                        <a href="${opp.url}" target="_blank" class="text-center bg-gray-900 hover:bg-indigo-600 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors shadow-md">Apply Now &rarr;</a>
+                    <div class="pt-5 border-t border-slate-50 flex justify-between items-center relative z-10">
+                        <button onclick="toggleBookmark(${opp.id}, this)" class="text-rose-500 hover:text-slate-400 text-sm font-bold px-3 py-3 transition-colors bg-rose-50 rounded-xl hover:bg-slate-50"><i class="fa-solid fa-heart mr-2"></i> Unsave</button>
+                        ${(opp.opportunity_type.toLowerCase() === 'job' || opp.opportunity_type.toLowerCase() === 'internship') ? 
+                            (match.cover_letter ? 
+                                `<button onclick="generateCoverLetter(${opp.id})" class="ml-3 flex-1 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 text-emerald-700 text-sm font-bold px-3 py-3 rounded-xl transition-colors shadow-sm"><i class="fa-solid fa-file-lines mr-2"></i> View Cover Letter</button>` : 
+                                `<button onclick="generateCoverLetter(${opp.id})" class="ml-3 flex-1 bg-white border border-indigo-100 hover:bg-indigo-50 text-indigo-600 text-sm font-bold px-3 py-3 rounded-xl transition-colors shadow-sm"><i class="fa-solid fa-pen-nib mr-2"></i> Cover Letter</button>`
+                            ) : ''}
+                        <a href="${opp.url}" target="_blank" class="flex-1 text-center bg-gradient-to-r from-slate-800 to-slate-900 hover:from-indigo-600 hover:to-indigo-700 text-white text-sm font-bold px-4 py-3 rounded-xl transition-all duration-300 shadow-md hover:shadow-lg ml-3">Apply Now &rarr;</a>
                     </div>
                 </div>
             `;
@@ -520,7 +620,172 @@ async function fetchSavedOpportunities() {
     }
 }
 
-async function toggleBookmark(matchId, btnElement) {
+async function fetchResumeHistory() {
+    if(!currentUserId) {
+        document.getElementById('historyContainer').innerHTML = `<p class="text-sm text-gray-500 bg-white p-6 rounded-2xl border border-gray-100 text-center">Please login to view your resume analysis history.</p>`;
+        return;
+    }
+    try {
+        const res = await fetch(`${API_BASE_URL}/resume-history/`, {
+            credentials: 'include'
+        });
+        if(!res.ok) throw new Error('Failed to fetch history');
+        const responseData = await res.json();
+        const data = responseData.results || responseData;
+        
+        const container = document.getElementById('historyContainer');
+        container.innerHTML = '';
+
+        if(data.length === 0) {
+            container.innerHTML = `<p class="text-sm text-gray-500 bg-white p-6 rounded-2xl border border-gray-100 text-center">No history found. Upload a resume to see your analysis timeline here.</p>`;
+            return;
+        }
+
+        data.forEach((item, historyIdx) => {
+            const date = new Date(item.created_at).toLocaleString();
+            const scoreColor = item.readiness_score >= 70 ? 'text-emerald-500' : item.readiness_score >= 40 ? 'text-amber-500' : 'text-rose-500';
+            
+            // Generate skills badges (All, not sliced)
+            const currentSkillsHtml = (item.current_skills || []).map(s => `<span class="px-2 py-1 bg-indigo-50 text-indigo-600 text-xs rounded-md mr-2 mb-2 inline-block">${s}</span>`).join('');
+            const gapSkillsHtml = (item.skill_gaps || []).map(s => `<span class="px-2 py-1 bg-rose-50 text-rose-600 text-xs rounded-md mr-2 mb-2 inline-block">${s}</span>`).join('');
+
+            // Skill Gap Analysis Table
+            let skillGapTableRows = '';
+            (item.skill_gaps || []).forEach(gap => {
+                skillGapTableRows += `
+                    <tr>
+                        <td class="py-4 px-6 font-medium text-gray-900">${gap}</td>
+                        <td class="py-4 px-6"><span class="px-2.5 py-1 text-xs rounded-full bg-rose-100 text-rose-700">Missing</span></td>
+                        <td class="py-4 px-6">
+                            <button onclick="searchOpportunity('${gap}')" class="text-indigo-600 hover:text-indigo-800 font-semibold underline text-sm transition-colors">
+                                Find ${gap} Courses &rarr;
+                            </button>
+                        </td>
+                    </tr>`;
+            });
+            const skillGapSection = skillGapTableRows ? `
+                <div class="mt-8 pt-6 border-t border-gray-100">
+                    <h5 class="text-lg font-bold text-slate-900 mb-4 flex items-center"><div class="bg-blue-50 text-blue-600 p-1.5 rounded-lg mr-3 text-sm"><i class="fa-solid fa-chart-line"></i></div> Skill Gap Analysis</h5>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-sm text-gray-600">
+                            <thead class="bg-gray-50 text-gray-700 uppercase text-[10px] tracking-wider font-bold">
+                                <tr>
+                                    <th class="py-3 px-6 rounded-tl-lg">Skill Requirement</th>
+                                    <th class="py-3 px-6">Level</th>
+                                    <th class="py-3 px-6 rounded-tr-lg">Recommendation</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-50">
+                                ${skillGapTableRows}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            ` : '';
+
+            // Resume Improvements List
+            let improvementsHtml = '';
+            (item.resume_improvements || []).forEach(tip => {
+                improvementsHtml += `<li class="p-4 bg-indigo-50 border-l-4 border-indigo-500 text-sm text-indigo-900 rounded-r-lg font-medium shadow-sm mb-2">${tip}</li>`;
+            });
+            const improvementsSection = improvementsHtml ? `
+                <div class="mt-8 pt-6 border-t border-gray-100">
+                    <h5 class="text-lg font-bold text-slate-900 mb-4">Resume Presentation Optimizations</h5>
+                    <ul class="space-y-3">
+                        ${improvementsHtml}
+                    </ul>
+                </div>
+            ` : '';
+
+            // Mock Interview Questions
+            let interviewHtml = '';
+            (item.interview_questions || []).forEach((q, idx) => {
+                const escapedQ = q.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                const uId = `hist-${historyIdx}-${idx}`; // Unique ID across all history elements
+                
+                let savedFeedbackHtml = '';
+                if (item.interview_feedbacks && item.interview_feedbacks[q]) {
+                    const savedData = item.interview_feedbacks[q];
+                    let formattedFeedback = savedData.feedback.replace(/\n/g, '<br/>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+                    savedFeedbackHtml = `
+                        <div class="mt-4 p-4 rounded-xl text-sm font-medium leading-relaxed bg-emerald-50 text-emerald-800 border border-emerald-100">
+                            <div class="mb-3 p-3 bg-white/50 rounded-lg italic text-gray-700"><strong>Your Answer:</strong> ${savedData.answer}</div>
+                            <i class="fa-solid fa-square-poll-vertical text-emerald-600 text-lg mb-2"></i><br/>${formattedFeedback}
+                        </div>
+                    `;
+                }
+                
+                interviewHtml += `
+                    <div class="p-5 bg-white border border-gray-100 shadow-sm rounded-xl hover:shadow-md transition-shadow mb-4">
+                        <span class="text-xs font-bold text-indigo-500 uppercase tracking-wider mb-2 block">Question ${idx + 1}</span>
+                        <p class="text-sm font-semibold text-gray-800 mb-4">${q}</p>
+                        ${savedFeedbackHtml ? savedFeedbackHtml : `
+                        <div class="flex flex-col space-y-3">
+                            <button id="btn-record-${uId}" onclick="toggleRecording('${uId}')" class="w-fit bg-slate-50 hover:bg-rose-50 text-slate-600 hover:text-rose-600 border border-slate-200 hover:border-rose-200 px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center shadow-sm">
+                                <i id="icon-record-${uId}" class="fa-solid fa-microphone mr-2"></i> 
+                                <span id="text-record-${uId}">Record Answer</span>
+                            </button>
+                            <div id="transcript-container-${uId}" class="hidden bg-indigo-50/50 p-4 rounded-xl border border-indigo-100 relative">
+                                <p id="transcript-${uId}" class="text-sm text-slate-700 italic mb-3"></p>
+                                <button onclick="submitInterviewAnswer('${uId}', '${escapedQ}', ${item.id})" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-2 rounded-lg shadow-md transition-colors w-fit flex items-center">
+                                    <i class="fa-solid fa-robot mr-2"></i> Evaluate
+                                </button>
+                            </div>
+                            <div id="feedback-container-${uId}" class="hidden p-4 rounded-xl text-sm font-medium leading-relaxed"></div>
+                        </div>`}
+                    </div>`;
+            });
+            const interviewSection = interviewHtml ? `
+                <div class="mt-8 pt-6 border-t border-gray-100">
+                    <h5 class="text-lg font-bold text-slate-900 mb-4">Tailored Mock Interview Questions</h5>
+                    <div>${interviewHtml}</div>
+                </div>
+            ` : '';
+
+            container.innerHTML += `
+                <div class="bg-white p-6 md:p-10 rounded-3xl border border-gray-100 shadow-sm hover:shadow-lg transition-all duration-300 relative overflow-hidden mb-8">
+                    <div class="flex flex-col md:flex-row justify-between items-start mb-6 border-b border-gray-50 pb-6">
+                        <div>
+                            <h4 class="text-2xl font-extrabold text-slate-900">${item.target_role || 'Target Role Not Set'}</h4>
+                            <p class="text-sm text-slate-500 mt-2"><i class="fa-regular fa-calendar mr-2"></i> Analyzed on: ${date}</p>
+                        </div>
+                        <div class="flex flex-col items-end mt-4 md:mt-0">
+                            <span class="text-4xl font-black ${scoreColor}">${item.readiness_score}%</span>
+                            <span class="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Score</span>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <div>
+                            <h5 class="text-sm font-bold text-slate-700 mb-3"><i class="fa-solid fa-check text-emerald-500 mr-2"></i> Current Skills</h5>
+                            <div class="flex flex-wrap">${currentSkillsHtml || '<span class="text-sm text-slate-400">None detected</span>'}</div>
+                        </div>
+                        <div>
+                            <h5 class="text-sm font-bold text-slate-700 mb-3"><i class="fa-solid fa-xmark text-rose-500 mr-2"></i> Skill Gaps</h5>
+                            <div class="flex flex-wrap">${gapSkillsHtml || '<span class="text-sm text-slate-400">None detected</span>'}</div>
+                        </div>
+                    </div>
+                    
+                    ${improvementsSection}
+                    ${skillGapSection}
+                    ${interviewSection}
+
+                    ${item.resume_file ? `
+                    <div class="mt-8 pt-6 border-t border-gray-50 flex justify-between items-center">
+                        <span class="text-sm font-bold text-slate-500 uppercase tracking-widest"><i class="fa-solid fa-paperclip mr-2"></i> Original Document</span>
+                        <a href="${item.resume_file}" target="_blank" class="text-sm font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-4 py-2 rounded-lg transition-colors flex items-center shadow-sm">
+                            View PDF <i class="fa-solid fa-arrow-up-right-from-square ml-2"></i>
+                        </a>
+                    </div>` : ''}
+                </div>
+            `;
+        });
+    } catch(e) {
+        console.error('fetchResumeHistory error:', e);
+        document.getElementById('historyContainer').innerHTML = `<p class="text-sm text-red-500 bg-white p-6 rounded-2xl border border-red-100 text-center">Error loading history.</p>`;
+    }
+}
+
+async function toggleBookmark(oppId, btnElement) {
     if(!currentUserId) {
         showToast('Please login to save opportunities', 'error');
         return;
@@ -546,11 +811,17 @@ async function toggleBookmark(matchId, btnElement) {
     }
 
     try {
-        const res = await fetch(`${API_BASE_URL}/bookmark/${matchId}/`, {
+        const res = await fetch(`${API_BASE_URL}/bookmark/${oppId}/`, {
             method: 'POST',
             credentials: 'include'
         });
         if(!res.ok) throw new Error('Failed to toggle bookmark');
+        
+        if (isCurrentlySaved) {
+            showToast('Opportunity removed from saved matches.', 'info');
+        } else {
+            showToast('Opportunity saved successfully!', 'success');
+        }
         
         // If we are on the saved tab, re-fetch to update list
         if(document.getElementById('section-saved').classList.contains('hidden') === false) {
@@ -563,7 +834,7 @@ async function toggleBookmark(matchId, btnElement) {
     }
 }
 
-async function generateCoverLetter(matchId) {
+async function generateCoverLetter(oppId) {
     if(!currentUserId) {
         showToast('Please login to generate cover letters', 'error');
         return;
@@ -575,7 +846,7 @@ async function generateCoverLetter(matchId) {
     content.innerHTML = `<div class="flex flex-col items-center justify-center h-full text-indigo-500"><i class="fa-solid fa-spinner fa-spin text-3xl mb-3"></i><p>CareerAI is writing your personalized cover letter...</p></div>`;
     
     try {
-        const res = await fetch(`${API_BASE_URL}/cover-letter/${matchId}/`, {
+        const res = await fetch(`${API_BASE_URL}/cover-letter/${oppId}/`, {
             method: 'POST',
             credentials: 'include'
         });
@@ -602,5 +873,203 @@ function copyCoverLetter() {
         navigator.clipboard.writeText(text).then(() => {
             showToast('Cover letter copied to clipboard!', 'success');
         });
+    }
+}
+
+// Google Translate Integration
+function googleTranslateElementInit() {
+    new google.translate.TranslateElement({
+        pageLanguage: 'en', 
+        includedLanguages: 'hi,en', 
+        autoDisplay: false
+    }, 'google_translate_element');
+
+    // Use MutationObserver to instantly fix Lighthouse Accessibility audits 
+    // the moment Google's script injects the select element.
+    const observer = new MutationObserver((mutations, obs) => {
+        const selectField = document.querySelector(".goog-te-combo");
+        if (selectField) {
+            if (!selectField.id) selectField.id = "google_translate_select";
+            if (!selectField.name) selectField.name = "google_translate_select";
+            if (!selectField.getAttribute("aria-label")) selectField.setAttribute("aria-label", "Language Translate Widget");
+            obs.disconnect(); // Stop observing once fixed
+        }
+    });
+    observer.observe(document.getElementById('google_translate_element'), { childList: true, subtree: true });
+}
+
+function changeLanguage(langCode) {
+    const selectField = document.querySelector(".goog-te-combo");
+    if (selectField) {
+        selectField.value = langCode;
+        // Fix for the double-click bug: use bubbles: true so Google's listener catches it
+        selectField.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+        
+        // Update UI toggle
+        if (langCode === 'en') {
+            document.getElementById('lang-en').classList.add('bg-white', 'shadow-sm', 'text-indigo-600');
+            document.getElementById('lang-en').classList.remove('text-slate-500', 'hover:text-slate-700');
+            document.getElementById('lang-hi').classList.add('text-slate-500', 'hover:text-slate-700');
+            document.getElementById('lang-hi').classList.remove('bg-white', 'shadow-sm', 'text-indigo-600');
+        } else {
+            document.getElementById('lang-hi').classList.add('bg-white', 'shadow-sm', 'text-indigo-600');
+            document.getElementById('lang-hi').classList.remove('text-slate-500', 'hover:text-slate-700');
+            document.getElementById('lang-en').classList.add('text-slate-500', 'hover:text-slate-700');
+            document.getElementById('lang-en').classList.remove('bg-white', 'shadow-sm', 'text-indigo-600');
+        }
+    }
+}
+
+// Password Visibility Toggle
+function togglePasswordVisibility(inputId, iconId) {
+    const input = document.getElementById(inputId);
+    const icon = document.getElementById(iconId);
+    
+    if (input.type === "password") {
+        input.type = "text";
+        icon.classList.remove("fa-eye");
+        icon.classList.add("fa-eye-slash");
+    } else {
+        input.type = "password";
+        icon.classList.remove("fa-eye-slash");
+        icon.classList.add("fa-eye");
+    }
+}
+
+// Mock Interview Audio Recording (Web Speech API)
+let recognition = null;
+let isRecording = false;
+let currentRecordingIdx = -1;
+        
+if ('webkitSpeechRecognition' in window) {
+    recognition = new webkitSpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+
+    recognition.onresult = (event) => {
+        if (currentRecordingIdx !== -1) {
+            const transcriptEl = document.getElementById(`transcript-${currentRecordingIdx}`);
+            let total = "";
+            for (let i = 0; i < event.results.length; i++) {
+                total += event.results[i][0].transcript;
+            }
+            transcriptEl.innerText = total;
+        }
+    };
+    
+    recognition.onerror = (e) => {
+        console.error("Speech Recognition Error:", e);
+        showToast("Microphone error. Please allow microphone permissions.", "error");
+        stopRecording();
+    };
+    
+    recognition.onend = () => {
+        if (isRecording) {
+            stopRecording();
+        }
+    };
+}
+
+function toggleRecording(idx) {
+    if (!recognition) {
+        showToast("Your browser does not support voice recording (Try Chrome).", "error");
+            return;
+        }
+
+    if (isRecording) {
+        if (currentRecordingIdx === idx) {
+            stopRecording();
+        } else {
+            stopRecording();
+            setTimeout(() => startRecording(idx), 200); // slight delay to allow stop
+        }
+    } else {
+        startRecording(idx);
+    }
+}
+
+function startRecording(idx) {
+    currentRecordingIdx = idx;
+    isRecording = true;
+    
+    const icon = document.getElementById(`icon-record-${idx}`);
+    const text = document.getElementById(`text-record-${idx}`);
+    const btn = document.getElementById(`btn-record-${idx}`);
+    
+    btn.classList.add('bg-rose-100', 'text-rose-600', 'border-rose-300', 'animate-pulse');
+    icon.classList.remove('fa-microphone');
+    icon.classList.add('fa-stop');
+    text.innerText = "Stop Recording";
+    
+    document.getElementById(`transcript-${idx}`).innerText = "Listening... Speak your answer.";
+    document.getElementById(`transcript-container-${idx}`).classList.remove('hidden');
+    document.getElementById(`feedback-container-${idx}`).classList.add('hidden');
+    document.getElementById(`feedback-container-${idx}`).classList.remove('bg-emerald-50', 'text-emerald-800', 'border', 'border-emerald-100', 'bg-rose-50', 'text-rose-800');
+    
+    try {
+        recognition.start();
+    } catch(e) {}
+}
+
+function stopRecording() {
+    if (currentRecordingIdx === -1) return;
+    const idx = currentRecordingIdx;
+    isRecording = false;
+    currentRecordingIdx = -1;
+    
+    const icon = document.getElementById(`icon-record-${idx}`);
+    const text = document.getElementById(`text-record-${idx}`);
+    const btn = document.getElementById(`btn-record-${idx}`);
+    
+    btn.classList.remove('bg-rose-100', 'text-rose-600', 'border-rose-300', 'animate-pulse');
+    icon.classList.remove('fa-stop');
+    icon.classList.add('fa-microphone');
+    text.innerText = "Record Answer";
+    
+    try {
+        recognition.stop();
+    } catch(e) {}
+}
+
+async function submitInterviewAnswer(idx, question, analysisId = null) {
+    if (isRecording) stopRecording();
+
+    const answer = document.getElementById(`transcript-${idx}`).innerText;
+    if (!answer || answer.includes("Listening...")) {
+        showToast("Please record a valid answer first.", "error");
+        return;
+    }
+    
+    const feedbackContainer = document.getElementById(`feedback-container-${idx}`);
+    feedbackContainer.classList.remove('hidden');
+    feedbackContainer.innerHTML = `<i class="fa-solid fa-spinner fa-spin text-indigo-500 mr-2"></i> Analyzing your response...`;
+    
+    try {
+        const payload = { question, answer };
+        if (analysisId) payload.analysis_id = analysisId;
+        
+        const res = await fetch(`${API_BASE_URL}/interview-evaluate/`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify(payload)
+        });
+            const data = await res.json();
+        
+        if (res.ok) {
+            feedbackContainer.classList.add('bg-emerald-50', 'text-emerald-800', 'border', 'border-emerald-100');
+            // Bold the specific keywords Gemini tends to use (Rating, Good, Missing)
+            let formattedFeedback = data.feedback.replace(/\n/g, '<br/>');
+            formattedFeedback = formattedFeedback.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+            feedbackContainer.innerHTML = `<i class="fa-solid fa-square-poll-vertical text-emerald-600 text-lg mb-2"></i><br/>${formattedFeedback}`;
+            } else {
+            feedbackContainer.classList.add('bg-rose-50', 'text-rose-800');
+            feedbackContainer.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> ${data.error}`;
+            }
+    } catch (e) {
+        console.error(e);
+        feedbackContainer.classList.add('bg-rose-50', 'text-rose-800');
+        feedbackContainer.innerHTML = `Network error connecting to AI.`;
     }
 }
