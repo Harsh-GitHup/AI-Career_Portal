@@ -4,15 +4,14 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('career_app', '0007_resumeanalysis'),
+        ("career_app", "0007_resumeanalysis"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='resumeanalysis',
-            name='resume_file',
-            field=models.FileField(blank=True, null=True, upload_to='resumes/'),
+            model_name="resumeanalysis",
+            name="resume_file",
+            field=models.FileField(blank=True, null=True, upload_to="resumes/"),
         ),
     ]

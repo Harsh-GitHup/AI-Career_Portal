@@ -4,20 +4,23 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('career_app', '0005_alter_opportunity_mode_and_more'),
+        ("career_app", "0005_alter_opportunity_mode_and_more"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='studentprofile',
-            name='experience',
-            field=models.JSONField(default=list, help_text='List of extracted work experience'),
+            model_name="studentprofile",
+            name="experience",
+            field=models.JSONField(
+                default=list, help_text="List of extracted work experience"
+            ),
         ),
         migrations.AddField(
-            model_name='studentprofile',
-            name='projects',
-            field=models.JSONField(default=list, help_text='List of extracted project details'),
+            model_name="studentprofile",
+            name="projects",
+            field=models.JSONField(
+                default=list, help_text="List of extracted project details"
+            ),
         ),
     ]

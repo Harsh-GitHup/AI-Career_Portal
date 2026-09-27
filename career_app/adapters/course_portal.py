@@ -1,14 +1,16 @@
 import logging
-from typing import List, Dict, Any
+from typing import Any, dict, list
+
 from .base import BaseAdapter
 
 logger = logging.getLogger(__name__)
+
 
 class CoursePortalAdapter(BaseAdapter):
     def __init__(self):
         super().__init__(provider_name="Tech Career Catalog")
 
-    def fetch(self) -> List[Dict[str, Any]]:
+    def fetch(self) -> list[dict[str, Any]]:
         return [
             {
                 "title": "Smart India Hackathon (SIH) Collegiate Edition",
@@ -21,7 +23,12 @@ class CoursePortalAdapter(BaseAdapter):
                 "url": "https://www.sih.gov.in/",
                 "description": "Nationwide digital product building challenge focused on agriculture, education, state governance, and AI applications.",
                 "eligibility": "Regular college students pursuing graduation or post-graduation",
-                "skills": ["RESTful API Development", "Predictive Modeling", "Containerization", "Python"]
+                "skills": [
+                    "RESTful API Development",
+                    "Predictive Modeling",
+                    "Containerization",
+                    "Python",
+                ],
             },
             {
                 "title": "Junior Data Analyst Internship",
@@ -34,11 +41,17 @@ class CoursePortalAdapter(BaseAdapter):
                 "url": "https://mpsedc.mp.gov.in/",
                 "description": "3-month paid internship developing departmental analytics dashboards and automated report generation systems.",
                 "eligibility": "B.Sc Maths/Stats, BCA, B.Tech or relevant IT degrees",
-                "skills": ["Data Visualization", "SQL", "Advanced Excel", "Power BI", "Tableau"]
-            }
+                "skills": [
+                    "Data Visualization",
+                    "SQL",
+                    "Advanced Excel",
+                    "Power BI",
+                    "Tableau",
+                ],
+            },
         ]
 
-    def normalize(self, raw_item: Dict[str, Any]) -> Dict[str, Any]:
+    def normalize(self, raw_item: dict[str, Any]) -> dict[str, Any]:
         return {
             "dedupe_hash": self.compute_dedupe_hash(raw_item["url"], raw_item["title"]),
             "title": raw_item["title"],
@@ -52,5 +65,5 @@ class CoursePortalAdapter(BaseAdapter):
             "description": raw_item.get("description", ""),
             "eligibility": raw_item.get("eligibility", ""),
             "skills": raw_item.get("skills", []),
-            "metadata_json": {"source": "direct_partner_feed"}
+            "metadata_json": {"source": "direct_partner_feed"},
         }

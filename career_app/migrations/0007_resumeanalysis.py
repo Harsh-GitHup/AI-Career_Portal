@@ -6,27 +6,41 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('career_app', '0006_studentprofile_experience_studentprofile_projects'),
+        ("career_app", "0006_studentprofile_experience_studentprofile_projects"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='ResumeAnalysis',
+            name="ResumeAnalysis",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('target_role', models.CharField(blank=True, max_length=255)),
-                ('current_skills', models.JSONField(default=list)),
-                ('skill_gaps', models.JSONField(default=list)),
-                ('resume_improvements', models.JSONField(default=list)),
-                ('interview_questions', models.JSONField(default=list)),
-                ('projects', models.JSONField(default=list)),
-                ('experience', models.JSONField(default=list)),
-                ('readiness_score', models.IntegerField(default=50)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('user', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='resume_analyses', to=settings.AUTH_USER_MODEL)),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("target_role", models.CharField(blank=True, max_length=255)),
+                ("current_skills", models.JSONField(default=list)),
+                ("skill_gaps", models.JSONField(default=list)),
+                ("resume_improvements", models.JSONField(default=list)),
+                ("interview_questions", models.JSONField(default=list)),
+                ("projects", models.JSONField(default=list)),
+                ("experience", models.JSONField(default=list)),
+                ("readiness_score", models.IntegerField(default=50)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                (
+                    "user",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="resume_analyses",
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
             ],
         ),
     ]

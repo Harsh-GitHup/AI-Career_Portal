@@ -1,42 +1,70 @@
+import logging
 import os
 import tempfile
-import logging
-from typing import List
+from typing import list
+
 from dotenv import load_dotenv
-from pydantic import BaseModel, Field
-from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_community.document_loaders import PyPDFLoader
+from langchain_google_genai import ChatGoogleGenerativeAI
+from pydantic import BaseModel, Field
+
 from .local_nlp import LocalNLPResumeParser
 
 logger = logging.getLogger(__name__)
 load_dotenv()
 
+
 class ResumeAnalysis(BaseModel):
-    full_name: str = Field(default="Candidate", description="Full name detected on the resume")
-    target_professions: List[str] = Field(description="Top 3 recommended career roles based on resume profile")
-    extracted_skills: List[str] = Field(description="Normalized list of hard and soft technical skills")
-    skill_gaps: List[str] = Field(description="Critical skills required for industry entry that are missing")
-    recommended_courses: List[str] = Field(description="Direct names of government or university certified courses")
-    resume_improvements: List[str] = Field(description="3 actionable, specific bullet suggestions to improve resume presentation")
-    interview_questions: List[str] = Field(description="5 technical and behavioral interview questions tailored to the resume")
-    summary: str = Field(default="", description="A short professional summary of the candidate")
-    projects: List[str] = Field(default=[], description="List of projects mentioned in the resume")
-    experience: List[str] = Field(default=[], description="List of work experiences or internships")
-    academic_records: List[dict] = Field(default=[], description="List of dicts containing degree, institution, graduation_year, and cgpa")
+    full_name: str = Field(
+        default="Candidate", description="Full name detected on the resume"
+    )
+    target_professions: list[str] = Field(
+        description="Top 3 recommended career roles based on resume profile"
+    )
+    extracted_skills: list[str] = Field(
+        description="Normalized list of hard and soft technical skills"
+    )
+    skill_gaps: list[str] = Field(
+        description="Critical skills required for industry entry that are missing"
+    )
+    recommended_courses: list[str] = Field(
+        description="Direct names of government or university certified courses"
+    )
+    resume_improvements: list[str] = Field(
+        description="3 actionable, specific bullet suggestions to improve resume presentation"
+    )
+    interview_questions: list[str] = Field(
+        description="5 technical and behavioral interview questions tailored to the resume"
+    )
+    summary: str = Field(
+        default="", description="A short professional summary of the candidate"
+    )
+    projects: list[str] = Field(
+        default=[], description="List of projects mentioned in the resume"
+    )
+    experience: list[str] = Field(
+        default=[], description="List of work experiences or internships"
+    )
+    academic_records: list[dict] = Field(
+        default=[],
+        description="List of dicts containing degree, institution, graduation_year, and cgpa",
+    )
+
 
 def analyze_resume(uploaded_file_bytes: bytes) -> ResumeAnalysis:
     """Safely extracts text from uploaded PDF bytes and prompts Gemini for structured analysis. Fallbacks to local NLP model."""
-    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
+    temp_path = None
     try:
-        temp_file.write(uploaded_file_bytes)
-        temp_file.close()
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file:
+            temp_file.write(uploaded_file_bytes)
+            temp_path = temp_file.name
 
-        loader = PyPDFLoader(file_path=temp_file.name)
+        loader = PyPDFLoader(file_path=temp_path)
         docs = loader.load()
         resume_text = "\n".join([doc.page_content for doc in docs])
     finally:
-        if os.path.exists(temp_file.name):
-            os.remove(temp_file.name)
+        if temp_path and os.path.exists(temp_path):
+            os.remove(temp_path)
 
     api_key = os.getenv("GOOGLE_API_KEY")
 
@@ -47,7 +75,7 @@ def analyze_resume(uploaded_file_bytes: bytes) -> ResumeAnalysis:
                 model=model_name,
                 google_api_key=api_key,
                 temperature=0.1,
-                max_retries=3  # Allow some retries for 503/429 before falling back
+                max_retries=3,  # Allow some retries for 503/429 before falling back
             )
             structured_llm = llm.with_structured_output(ResumeAnalysis)
             prompt = f"""
@@ -68,28 +96,29 @@ def analyze_resume(uploaded_file_bytes: bytes) -> ResumeAnalysis:
             {resume_text}
             """
             return structured_llm.invoke(prompt)
-        except Exception as e:
-            logger.warning(f"LLM API Error (falling back to local parser): {e}")
+        except Exception as e:  # noqa: BLE001
+            logger.warning(
+                f"LLM API Error (falling back to local parser): {e}")
 
     # --- FALLBACK: Use the custom local model instead of the API ---
     logger.info("Using LocalNLPResumeParser fallback.")
     model = LocalNLPResumeParser(resume_text)
-    
+
     name = model.extract_name()
     skills = model.extract_skills()
     roles = model.determine_roles(skills)
-    
+
     gaps, courses, questions = [], [], []
     for role in roles:
         r_gaps, r_courses = model.find_gaps_and_courses(role, skills)
         gaps.extend(r_gaps)
         courses.extend(r_courses)
         questions.extend(model.generate_interview_qs(role))
-        
+
     gaps = list(dict.fromkeys(gaps))[:5]
     courses = list(dict.fromkeys(courses))[:5]
     questions = list(dict.fromkeys(questions))[:5]
-    
+
     improvements = model.get_improvements(gaps)
 
     summary = model.extract_summary()
@@ -108,12 +137,16 @@ def analyze_resume(uploaded_file_bytes: bytes) -> ResumeAnalysis:
         summary=summary,
         projects=projects,
         experience=experience,
-        academic_records=academics
+        academic_records=academics,
     )
 
-def calculate_opportunity_relevance(candidate_skills: List[str], target_role: str, opportunity) -> tuple[float, List[str], str]:
+
+def calculate_opportunity_relevance(
+    candidate_skills: list[str], target_role: str, opportunity
+) -> tuple[float, list[str], str]:
     """Calculates relevance score based on skill overlap and target role keyword matching."""
-    opp_skills = list(opportunity.required_skills.values_list('skill_name', flat=True))
+    opp_skills = list(opportunity.required_skills.values_list(
+        "skill_name", flat=True))
     if not opp_skills:
         # If no skills assigned, assign neutral baseline
         return 50.0, [], "General career alignment."
@@ -134,5 +167,5 @@ def calculate_opportunity_relevance(candidate_skills: List[str], target_role: st
 
     final_score = round(min(base_score + role_boost, 100.0), 1)
     reasoning = f"Matched {len(matches)} of {len(opp_skills)} required competencies ({', '.join(matches[:3])})."
-    
+
     return final_score, matches, reasoning

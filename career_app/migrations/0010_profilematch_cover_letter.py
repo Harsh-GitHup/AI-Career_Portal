@@ -4,15 +4,14 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('career_app', '0009_resumeanalysis_interview_feedbacks'),
+        ("career_app", "0009_resumeanalysis_interview_feedbacks"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='profilematch',
-            name='cover_letter',
+            model_name="profilematch",
+            name="cover_letter",
             field=models.TextField(blank=True, null=True),
         ),
     ]

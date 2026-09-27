@@ -5,44 +5,89 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('career_app', '0003_studentprofile_bio_and_more'),
+        ("career_app", "0003_studentprofile_bio_and_more"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='CareerRole',
+            name="CareerRole",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('title', models.CharField(db_index=True, max_length=255, unique=True)),
-                ('description', models.TextField(blank=True)),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("title", models.CharField(db_index=True, max_length=255, unique=True)),
+                ("description", models.TextField(blank=True)),
             ],
         ),
         migrations.CreateModel(
-            name='CourseRecommendation',
+            name="CourseRecommendation",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('skill_name', models.CharField(db_index=True, max_length=100)),
-                ('course_title', models.CharField(max_length=255)),
-                ('url', models.URLField(blank=True, max_length=1000)),
-                ('provider', models.CharField(blank=True, max_length=255)),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("skill_name", models.CharField(db_index=True, max_length=100)),
+                ("course_title", models.CharField(max_length=255)),
+                ("url", models.URLField(blank=True, max_length=1000)),
+                ("provider", models.CharField(blank=True, max_length=255)),
             ],
         ),
         migrations.CreateModel(
-            name='InterviewQuestion',
+            name="InterviewQuestion",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('question_text', models.TextField()),
-                ('role', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='questions', to='career_app.careerrole')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("question_text", models.TextField()),
+                (
+                    "role",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="questions",
+                        to="career_app.careerrole",
+                    ),
+                ),
             ],
         ),
         migrations.CreateModel(
-            name='RoleSkill',
+            name="RoleSkill",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('skill_name', models.CharField(max_length=100)),
-                ('role', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='skills', to='career_app.careerrole')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("skill_name", models.CharField(max_length=100)),
+                (
+                    "role",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="skills",
+                        to="career_app.careerrole",
+                    ),
+                ),
             ],
         ),
     ]

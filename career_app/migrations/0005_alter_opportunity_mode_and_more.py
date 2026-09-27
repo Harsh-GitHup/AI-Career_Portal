@@ -4,20 +4,26 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('career_app', '0004_careerrole_courserecommendation_interviewquestion_and_more'),
+        (
+            "career_app",
+            "0004_careerrole_courserecommendation_interviewquestion_and_more",
+        ),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='opportunity',
-            name='mode',
-            field=models.CharField(default='Online', max_length=50),
+            model_name="opportunity",
+            name="mode",
+            field=models.CharField(default="Online", max_length=50),
         ),
         migrations.AlterField(
-            model_name='opportunity',
-            name='opportunity_type',
-            field=models.CharField(db_index=True, help_text='e.g., Job, Internship, Scheme, Fellowship', max_length=100),
+            model_name="opportunity",
+            name="opportunity_type",
+            field=models.CharField(
+                db_index=True,
+                help_text="e.g., Job, Internship, Scheme, Fellowship",
+                max_length=100,
+            ),
         ),
     ]

@@ -5,31 +5,55 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('career_app', '0002_opportunity_opportunityskill_profilematch_and_more'),
+        ("career_app", "0002_opportunity_opportunityskill_profilematch_and_more"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='studentprofile',
-            name='bio',
+            model_name="studentprofile",
+            name="bio",
             field=models.TextField(blank=True),
         ),
         migrations.AddField(
-            model_name='studentprofile',
-            name='employability_score',
+            model_name="studentprofile",
+            name="employability_score",
             field=models.IntegerField(blank=True, null=True),
         ),
         migrations.CreateModel(
-            name='AcademicRecord',
+            name="AcademicRecord",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('degree', models.CharField(help_text='e.g., B.Tech in Computer Science', max_length=150)),
-                ('institution', models.CharField(max_length=200)),
-                ('graduation_year', models.IntegerField()),
-                ('cgpa', models.DecimalField(decimal_places=2, help_text='e.g., 7.90', max_digits=4)),
-                ('student', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='academics', to='career_app.studentprofile')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                (
+                    "degree",
+                    models.CharField(
+                        help_text="e.g., B.Tech in Computer Science", max_length=150
+                    ),
+                ),
+                ("institution", models.CharField(max_length=200)),
+                ("graduation_year", models.IntegerField()),
+                (
+                    "cgpa",
+                    models.DecimalField(
+                        decimal_places=2, help_text="e.g., 7.90", max_digits=4
+                    ),
+                ),
+                (
+                    "student",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="academics",
+                        to="career_app.studentprofile",
+                    ),
+                ),
             ],
         ),
     ]
