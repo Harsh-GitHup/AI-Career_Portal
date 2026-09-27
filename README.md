@@ -203,6 +203,23 @@ Apply Ruff formatting with:
 uvx ruff format career_app core_project manage.py
 ```
 
+## AI Skill
+
+> Read AGENTS.md and .claude/skills/source-audit/SKILL.md.
+Then audit the active project according to those instructions.
+Do not modify archived code.
+
+These are example commands for invoking the custom dependency security skill:
+
+- `/dependency-cve-audit audit all active dependencies`
+  Scans project dependencies for CVEs, outdated packages, conflicts, and lockfile drift.
+
+- `/dependency-cve-audit check CVE-XXXX-YYYY`
+  Investigates a specific CVE and checks whether your project is affected.
+
+- `/dependency-cve-audit upgrade the vulnerable package safely`
+  Finds a compatible fixed version, updates the manifest/lockfile, then runs validation and rescans.
+
 ## 🤝 Contributing
 
 1. Create a focused feature branch.
