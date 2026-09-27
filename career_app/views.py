@@ -280,9 +280,7 @@ class RecommendedMatchesAPIView(APIView):
         try:
             profile = StudentProfile.objects.get(user=request.user)
         except StudentProfile.DoesNotExist:
-            return Response(
-                {"error": "Profile not found"}, status=status.HTTP_404_NOT_FOUND
-            )
+            profile = StudentProfile.objects.create(user=request.user, target_role="Undecided")
 
         matches = ProfileMatch.objects.filter(profile=profile).select_related(
             "opportunity"
@@ -461,7 +459,7 @@ class ToggleBookmarkAPIView(APIView):
 
     def post(self, request, opp_id, *args, **kwargs):
         opportunity = get_object_or_404(Opportunity, id=opp_id)
-        profile = get_object_or_404(StudentProfile, user=request.user)
+        profile, _ = StudentProfile.objects.get_or_create(user=request.user, defaults={"target_role": "Undecided"})
         match, created = ProfileMatch.objects.get_or_create(
             profile=profile,
             opportunity=opportunity,
