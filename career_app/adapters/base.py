@@ -1,6 +1,6 @@
 import hashlib
 from abc import ABC, abstractmethod
-from typing import Any, dict, list
+from typing import Any
 
 
 class BaseAdapter(ABC):

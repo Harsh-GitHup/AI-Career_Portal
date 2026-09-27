@@ -1,5 +1,5 @@
 import logging
-from typing import Any, dict, list
+from typing import Any
 
 from .base import BaseAdapter
 

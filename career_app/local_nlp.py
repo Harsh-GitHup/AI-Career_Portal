@@ -1,7 +1,6 @@
 import logging
 import re
 from collections import Counter
-from typing import list
 
 from .models import CareerRole, CourseRecommendation
 

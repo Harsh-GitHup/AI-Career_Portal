@@ -3,7 +3,6 @@ import hashlib
 import logging
 import os
 import urllib.parse
-from typing import dict, list
 
 import httpx
 from bs4 import BeautifulSoup

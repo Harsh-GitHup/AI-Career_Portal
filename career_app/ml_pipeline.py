@@ -1,7 +1,6 @@
 import logging
 import os
 import tempfile
-from typing import list
 
 from dotenv import load_dotenv
 from langchain_community.document_loaders import PyPDFLoader
