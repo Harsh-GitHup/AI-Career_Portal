@@ -24,52 +24,52 @@ window.onload = () => {
 // loadLatestResumePreview has been removed to prevent fetching from history.
 // Preview will only show the most recently uploaded resume in the active session.
 async function renderPDF(source) {
-        document.getElementById('resumePlaceholder').classList.add('hidden');
+    document.getElementById('resumePlaceholder').classList.add('hidden');
     const canvasWrapper = document.getElementById('resumePreviewCanvasWrapper');
-    if(!canvasWrapper) return;
+    if (!canvasWrapper) return;
     canvasWrapper.classList.remove('hidden');
     canvasWrapper.innerHTML = '<div class="text-white animate-pulse"><i class="fa-solid fa-spinner fa-spin mr-2"></i> Rendering PDF...</div>';
 
     try {
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
-        
+
         let loadingTask;
         if (typeof source === 'string') {
             loadingTask = pdfjsLib.getDocument(source); // URL
         } else {
-            loadingTask = pdfjsLib.getDocument({data: source}); // ArrayBuffer
+            loadingTask = pdfjsLib.getDocument({ data: source }); // ArrayBuffer
         }
-        
+
         const pdf = await loadingTask.promise;
         canvasWrapper.innerHTML = '';
-        
+
         for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
             const page = await pdf.getPage(pageNum);
             const containerWidth = document.getElementById('resumePreviewContainer').clientWidth || 400;
             const unscaledViewport = page.getViewport({ scale: 1.0 });
-            const scale = (containerWidth - 40) / unscaledViewport.width; 
+            const scale = (containerWidth - 40) / unscaledViewport.width;
             const viewport = page.getViewport({ scale: scale > 1.5 ? 1.5 : scale });
-            
+
             const canvas = document.createElement('canvas');
             const context = canvas.getContext('2d');
-            
+
             // Fix for blurry text on high DPI displays
             const outputScale = window.devicePixelRatio || 1;
             canvas.width = Math.floor(viewport.width * outputScale);
             canvas.height = Math.floor(viewport.height * outputScale);
             canvas.style.width = Math.floor(viewport.width) + "px";
             canvas.style.height = Math.floor(viewport.height) + "px";
-            
+
             canvas.className = 'rounded-lg shadow-md bg-white mb-4';
-            
-            const transform = outputScale !== 1 
-                ? [outputScale, 0, 0, outputScale, 0, 0] 
+
+            const transform = outputScale !== 1
+                ? [outputScale, 0, 0, outputScale, 0, 0]
                 : null;
-                
-            const renderContext = { 
-                canvasContext: context, 
+
+            const renderContext = {
+                canvasContext: context,
                 transform: transform,
-                viewport: viewport 
+                viewport: viewport
             };
             await page.render(renderContext).promise;
             canvasWrapper.appendChild(canvas);
@@ -175,7 +175,7 @@ async function fetchDynamicTypes() {
                 opt.value = t;
                 opt.textContent = t;
                 typeSelect.appendChild(opt);
-                
+
                 if (savedTypeSelect) {
                     const optSaved = document.createElement('option');
                     optSaved.value = t;
@@ -518,7 +518,7 @@ async function fetchRecommendations() {
         const res = await fetch(`${API_BASE_URL}/recommendations/`, {
             credentials: 'include'
         });
-        if(!res.ok) return;
+        if (!res.ok) return;
         const data = await res.json();
 
         const allMatches = [...(data.schemes || []), ...(data.opportunities || [])];
@@ -550,11 +550,11 @@ async function fetchRecommendations() {
                         <button onclick="toggleBookmark(${opp.id}, this)" class="w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-300 shadow-sm ${match.is_bookmarked ? 'text-rose-500 bg-rose-50 hover:bg-rose-100 border border-rose-100' : 'text-slate-400 bg-white border border-slate-200 hover:text-rose-500 hover:border-rose-200 hover:bg-rose-50'}">
                             <i class="${match.is_bookmarked ? 'fa-solid' : 'fa-regular'} fa-heart text-xl"></i>
                         </button>
-                        ${(opp.opportunity_type.toLowerCase() === 'job' || opp.opportunity_type.toLowerCase() === 'internship') ? 
-                            (match.cover_letter ? 
-                                `<button onclick="generateCoverLetter(${opp.id})" class="ml-3 flex-1 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 text-emerald-700 text-sm font-bold px-3 py-3 rounded-xl transition-colors shadow-sm"><i class="fa-solid fa-file-lines mr-2"></i> View Cover Letter</button>` : 
-                                `<button onclick="generateCoverLetter(${opp.id})" class="ml-3 flex-1 bg-white border border-indigo-100 hover:bg-indigo-50 text-indigo-600 text-sm font-bold px-3 py-3 rounded-xl transition-colors shadow-sm"><i class="fa-solid fa-pen-nib mr-2"></i> Cover Letter</button>`
-                            ) : ''}
+                        ${(opp.opportunity_type.toLowerCase() === 'job' || opp.opportunity_type.toLowerCase() === 'internship') ?
+                    (match.cover_letter ?
+                        `<button onclick="generateCoverLetter(${opp.id})" class="ml-3 flex-1 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 text-emerald-700 text-sm font-bold px-3 py-3 rounded-xl transition-colors shadow-sm"><i class="fa-solid fa-file-lines mr-2"></i> View Cover Letter</button>` :
+                        `<button onclick="generateCoverLetter(${opp.id})" class="ml-3 flex-1 bg-white border border-indigo-100 hover:bg-indigo-50 text-indigo-600 text-sm font-bold px-3 py-3 rounded-xl transition-colors shadow-sm"><i class="fa-solid fa-pen-nib mr-2"></i> Cover Letter</button>`
+                    ) : ''}
                         <a href="${opp.url}" target="_blank" class="flex-1 text-center bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-sm font-bold px-4 py-3 rounded-xl transition-all duration-300 shadow-md hover:shadow-lg ml-3">View &rarr;</a>
                     </div>
                 </div>`;
@@ -562,7 +562,7 @@ async function fetchRecommendations() {
 
         container.innerHTML = html + container.innerHTML;
         showToast(`Found ${allMatches.length} AI-matched opportunities tailored for you!`, 'success');
-    } catch(e) {
+    } catch (e) {
         console.error('fetchRecommendations error:', e);
     }
 }
@@ -572,7 +572,7 @@ async function fetchSavedOpportunities() {
         const res = await fetch(`${API_BASE_URL}/recommendations/`, {
             credentials: 'include'
         });
-        if(!res.ok) return;
+        if (!res.ok) return;
         const data = await res.json();
         let allMatches = [...(data.schemes || []), ...(data.opportunities || [])].filter(m => m.is_bookmarked);
 
@@ -583,7 +583,7 @@ async function fetchSavedOpportunities() {
 
         const container = document.getElementById('savedContainer');
         container.innerHTML = '';
-        
+
         if (allMatches.length === 0) {
             container.innerHTML = `<p class="text-sm text-gray-500 col-span-2 text-center py-8">No saved matches yet. Bookmark opportunities from the Dashboard to see them here.</p>`;
             return;
@@ -605,23 +605,23 @@ async function fetchSavedOpportunities() {
                     </div>
                     <div class="pt-5 border-t border-slate-50 flex justify-between items-center relative z-10">
                         <button onclick="toggleBookmark(${opp.id}, this)" class="text-rose-500 hover:text-slate-400 text-sm font-bold px-3 py-3 transition-colors bg-rose-50 rounded-xl hover:bg-slate-50"><i class="fa-solid fa-heart mr-2"></i> Unsave</button>
-                        ${(opp.opportunity_type.toLowerCase() === 'job' || opp.opportunity_type.toLowerCase() === 'internship') ? 
-                            (match.cover_letter ? 
-                                `<button onclick="generateCoverLetter(${opp.id})" class="ml-3 flex-1 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 text-emerald-700 text-sm font-bold px-3 py-3 rounded-xl transition-colors shadow-sm"><i class="fa-solid fa-file-lines mr-2"></i> View Cover Letter</button>` : 
-                                `<button onclick="generateCoverLetter(${opp.id})" class="ml-3 flex-1 bg-white border border-indigo-100 hover:bg-indigo-50 text-indigo-600 text-sm font-bold px-3 py-3 rounded-xl transition-colors shadow-sm"><i class="fa-solid fa-pen-nib mr-2"></i> Cover Letter</button>`
-                            ) : ''}
+                        ${(opp.opportunity_type.toLowerCase() === 'job' || opp.opportunity_type.toLowerCase() === 'internship') ?
+                    (match.cover_letter ?
+                        `<button onclick="generateCoverLetter(${opp.id})" class="ml-3 flex-1 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 text-emerald-700 text-sm font-bold px-3 py-3 rounded-xl transition-colors shadow-sm"><i class="fa-solid fa-file-lines mr-2"></i> View Cover Letter</button>` :
+                        `<button onclick="generateCoverLetter(${opp.id})" class="ml-3 flex-1 bg-white border border-indigo-100 hover:bg-indigo-50 text-indigo-600 text-sm font-bold px-3 py-3 rounded-xl transition-colors shadow-sm"><i class="fa-solid fa-pen-nib mr-2"></i> Cover Letter</button>`
+                    ) : ''}
                         <a href="${opp.url}" target="_blank" class="flex-1 text-center bg-gradient-to-r from-slate-800 to-slate-900 hover:from-indigo-600 hover:to-indigo-700 text-white text-sm font-bold px-4 py-3 rounded-xl transition-all duration-300 shadow-md hover:shadow-lg ml-3">Apply Now &rarr;</a>
                     </div>
                 </div>
             `;
         });
-    } catch(e) {
+    } catch (e) {
         console.error('fetchSavedOpportunities error:', e);
     }
 }
 
 async function fetchResumeHistory() {
-    if(!currentUserId) {
+    if (!currentUserId) {
         document.getElementById('historyContainer').innerHTML = `<p class="text-sm text-gray-500 bg-white p-6 rounded-2xl border border-gray-100 text-center">Please login to view your resume analysis history.</p>`;
         return;
     }
@@ -629,14 +629,14 @@ async function fetchResumeHistory() {
         const res = await fetch(`${API_BASE_URL}/resume-history/`, {
             credentials: 'include'
         });
-        if(!res.ok) throw new Error('Failed to fetch history');
+        if (!res.ok) throw new Error('Failed to fetch history');
         const responseData = await res.json();
         const data = responseData.results || responseData;
-        
+
         const container = document.getElementById('historyContainer');
         container.innerHTML = '';
 
-        if(data.length === 0) {
+        if (data.length === 0) {
             container.innerHTML = `<p class="text-sm text-gray-500 bg-white p-6 rounded-2xl border border-gray-100 text-center">No history found. Upload a resume to see your analysis timeline here.</p>`;
             return;
         }
@@ -644,7 +644,7 @@ async function fetchResumeHistory() {
         data.forEach((item, historyIdx) => {
             const date = new Date(item.created_at).toLocaleString();
             const scoreColor = item.readiness_score >= 70 ? 'text-emerald-500' : item.readiness_score >= 40 ? 'text-amber-500' : 'text-rose-500';
-            
+
             // Generate skills badges (All, not sliced)
             const currentSkillsHtml = (item.current_skills || []).map(s => `<span class="px-2 py-1 bg-indigo-50 text-indigo-600 text-xs rounded-md mr-2 mb-2 inline-block">${s}</span>`).join('');
             const gapSkillsHtml = (item.skill_gaps || []).map(s => `<span class="px-2 py-1 bg-rose-50 text-rose-600 text-xs rounded-md mr-2 mb-2 inline-block">${s}</span>`).join('');
@@ -702,7 +702,7 @@ async function fetchResumeHistory() {
             (item.interview_questions || []).forEach((q, idx) => {
                 const escapedQ = q.replace(/'/g, "\\'").replace(/"/g, '&quot;');
                 const uId = `hist-${historyIdx}-${idx}`; // Unique ID across all history elements
-                
+
                 let savedFeedbackHtml = '';
                 if (item.interview_feedbacks && item.interview_feedbacks[q]) {
                     const savedData = item.interview_feedbacks[q];
@@ -714,7 +714,7 @@ async function fetchResumeHistory() {
                         </div>
                     `;
                 }
-                
+
                 interviewHtml += `
                     <div class="p-5 bg-white border border-gray-100 shadow-sm rounded-xl hover:shadow-md transition-shadow mb-4">
                         <span class="text-xs font-bold text-indigo-500 uppercase tracking-wider mb-2 block">Question ${idx + 1}</span>
@@ -779,22 +779,22 @@ async function fetchResumeHistory() {
                 </div>
             `;
         });
-    } catch(e) {
+    } catch (e) {
         console.error('fetchResumeHistory error:', e);
         document.getElementById('historyContainer').innerHTML = `<p class="text-sm text-red-500 bg-white p-6 rounded-2xl border border-red-100 text-center">Error loading history.</p>`;
     }
 }
 
 async function toggleBookmark(oppId, btnElement) {
-    if(!currentUserId) {
+    if (!currentUserId) {
         showToast('Please login to save opportunities', 'error');
         return;
     }
-    
+
     // Optimistic UI update
     const icon = btnElement.querySelector('i');
     const isCurrentlySaved = icon.classList.contains('fa-solid');
-    
+
     if (isCurrentlySaved) {
         icon.classList.remove('fa-solid');
         icon.classList.add('fa-regular');
@@ -815,16 +815,16 @@ async function toggleBookmark(oppId, btnElement) {
             method: 'POST',
             credentials: 'include'
         });
-        if(!res.ok) throw new Error('Failed to toggle bookmark');
-        
+        if (!res.ok) throw new Error('Failed to toggle bookmark');
+
         if (isCurrentlySaved) {
             showToast('Opportunity removed from saved matches.', 'info');
         } else {
             showToast('Opportunity saved successfully!', 'success');
         }
-        
+
         // If we are on the saved tab, re-fetch to update list
-        if(document.getElementById('section-saved').classList.contains('hidden') === false) {
+        if (document.getElementById('section-saved').classList.contains('hidden') === false) {
             fetchSavedOpportunities();
         }
     } catch (e) {
@@ -835,7 +835,7 @@ async function toggleBookmark(oppId, btnElement) {
 }
 
 async function generateCoverLetter(oppId) {
-    if(!currentUserId) {
+    if (!currentUserId) {
         showToast('Please login to generate cover letters', 'error');
         return;
     }
@@ -844,14 +844,14 @@ async function generateCoverLetter(oppId) {
     const content = document.getElementById('coverLetterContent');
     modal.classList.remove('hidden');
     content.innerHTML = `<div class="flex flex-col items-center justify-center h-full text-indigo-500"><i class="fa-solid fa-spinner fa-spin text-3xl mb-3"></i><p>CareerAI is writing your personalized cover letter...</p></div>`;
-    
+
     try {
         const res = await fetch(`${API_BASE_URL}/cover-letter/${oppId}/`, {
             method: 'POST',
             credentials: 'include'
         });
         const data = await res.json();
-        
+
         if (res.ok) {
             content.innerText = data.cover_letter;
         } else {
@@ -879,8 +879,8 @@ function copyCoverLetter() {
 // Google Translate Integration
 function googleTranslateElementInit() {
     new google.translate.TranslateElement({
-        pageLanguage: 'en', 
-        includedLanguages: 'hi,en', 
+        pageLanguage: 'en',
+        includedLanguages: 'hi,en',
         autoDisplay: false
     }, 'google_translate_element');
 
@@ -904,7 +904,7 @@ function changeLanguage(langCode) {
         selectField.value = langCode;
         // Fix for the double-click bug: use bubbles: true so Google's listener catches it
         selectField.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
-        
+
         // Update UI toggle
         if (langCode === 'en') {
             document.getElementById('lang-en').classList.add('bg-white', 'shadow-sm', 'text-indigo-600');
@@ -924,7 +924,7 @@ function changeLanguage(langCode) {
 function togglePasswordVisibility(inputId, iconId) {
     const input = document.getElementById(inputId);
     const icon = document.getElementById(iconId);
-    
+
     if (input.type === "password") {
         input.type = "text";
         icon.classList.remove("fa-eye");
@@ -940,7 +940,7 @@ function togglePasswordVisibility(inputId, iconId) {
 let recognition = null;
 let isRecording = false;
 let currentRecordingIdx = -1;
-        
+
 if ('webkitSpeechRecognition' in window) {
     recognition = new webkitSpeechRecognition();
     recognition.continuous = true;
@@ -957,13 +957,13 @@ if ('webkitSpeechRecognition' in window) {
             transcriptEl.innerText = total;
         }
     };
-    
+
     recognition.onerror = (e) => {
         console.error("Speech Recognition Error:", e);
         showToast("Microphone error. Please allow microphone permissions.", "error");
         stopRecording();
     };
-    
+
     recognition.onend = () => {
         if (isRecording) {
             stopRecording();
@@ -974,8 +974,8 @@ if ('webkitSpeechRecognition' in window) {
 function toggleRecording(idx) {
     if (!recognition) {
         showToast("Your browser does not support voice recording (Try Chrome).", "error");
-            return;
-        }
+        return;
+    }
 
     if (isRecording) {
         if (currentRecordingIdx === idx) {
@@ -992,24 +992,24 @@ function toggleRecording(idx) {
 function startRecording(idx) {
     currentRecordingIdx = idx;
     isRecording = true;
-    
+
     const icon = document.getElementById(`icon-record-${idx}`);
     const text = document.getElementById(`text-record-${idx}`);
     const btn = document.getElementById(`btn-record-${idx}`);
-    
+
     btn.classList.add('bg-rose-100', 'text-rose-600', 'border-rose-300', 'animate-pulse');
     icon.classList.remove('fa-microphone');
     icon.classList.add('fa-stop');
     text.innerText = "Stop Recording";
-    
+
     document.getElementById(`transcript-${idx}`).innerText = "Listening... Speak your answer.";
     document.getElementById(`transcript-container-${idx}`).classList.remove('hidden');
     document.getElementById(`feedback-container-${idx}`).classList.add('hidden');
     document.getElementById(`feedback-container-${idx}`).classList.remove('bg-emerald-50', 'text-emerald-800', 'border', 'border-emerald-100', 'bg-rose-50', 'text-rose-800');
-    
+
     try {
         recognition.start();
-    } catch(e) {}
+    } catch (e) { }
 }
 
 function stopRecording() {
@@ -1017,19 +1017,19 @@ function stopRecording() {
     const idx = currentRecordingIdx;
     isRecording = false;
     currentRecordingIdx = -1;
-    
+
     const icon = document.getElementById(`icon-record-${idx}`);
     const text = document.getElementById(`text-record-${idx}`);
     const btn = document.getElementById(`btn-record-${idx}`);
-    
+
     btn.classList.remove('bg-rose-100', 'text-rose-600', 'border-rose-300', 'animate-pulse');
     icon.classList.remove('fa-stop');
     icon.classList.add('fa-microphone');
     text.innerText = "Record Answer";
-    
+
     try {
         recognition.stop();
-    } catch(e) {}
+    } catch (e) { }
 }
 
 async function submitInterviewAnswer(idx, question, analysisId = null) {
@@ -1040,33 +1040,33 @@ async function submitInterviewAnswer(idx, question, analysisId = null) {
         showToast("Please record a valid answer first.", "error");
         return;
     }
-    
+
     const feedbackContainer = document.getElementById(`feedback-container-${idx}`);
     feedbackContainer.classList.remove('hidden');
     feedbackContainer.innerHTML = `<i class="fa-solid fa-spinner fa-spin text-indigo-500 mr-2"></i> Analyzing your response...`;
-    
+
     try {
         const payload = { question, answer };
         if (analysisId) payload.analysis_id = analysisId;
-        
+
         const res = await fetch(`${API_BASE_URL}/interview-evaluate/`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
             body: JSON.stringify(payload)
         });
-            const data = await res.json();
-        
+        const data = await res.json();
+
         if (res.ok) {
             feedbackContainer.classList.add('bg-emerald-50', 'text-emerald-800', 'border', 'border-emerald-100');
             // Bold the specific keywords Gemini tends to use (Rating, Good, Missing)
             let formattedFeedback = data.feedback.replace(/\n/g, '<br/>');
             formattedFeedback = formattedFeedback.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
             feedbackContainer.innerHTML = `<i class="fa-solid fa-square-poll-vertical text-emerald-600 text-lg mb-2"></i><br/>${formattedFeedback}`;
-            } else {
+        } else {
             feedbackContainer.classList.add('bg-rose-50', 'text-rose-800');
             feedbackContainer.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> ${data.error}`;
-            }
+        }
     } catch (e) {
         console.error(e);
         feedbackContainer.classList.add('bg-rose-50', 'text-rose-800');
