@@ -2,6 +2,30 @@ const API_BASE_URL = 'http://127.0.0.1:8000/api';
 let currentUserId = localStorage.getItem('user_id');
 let currentPage = 1;
 
+function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, (character) => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;'
+    }[character]));
+}
+
+function safeExternalUrl(value) {
+    try {
+        const url = new URL(value, window.location.origin);
+        if (!['http:', 'https:'].includes(url.protocol)) return '#';
+        return escapeHtml(url.href);
+    } catch (error) {
+        return '#';
+    }
+}
+
+function encodeInlineValue(value) {
+    return encodeURIComponent(String(value ?? ''));
+}
+
 window.onload = () => {
     const savedUsername = localStorage.getItem('username');
     if (currentUserId && savedUsername) {
@@ -15,13 +39,11 @@ window.onload = () => {
 
         // Dynamically fetch profile data
         fetchProfile();
-        loadLatestResumePreview();
     }
 
     fetchDynamicTypes();
 };
 
-// loadLatestResumePreview has been removed to prevent fetching from history.
 // Preview will only show the most recently uploaded resume in the active session.
 async function renderPDF(source) {
     document.getElementById('resumePlaceholder').classList.add('hidden');
@@ -91,6 +113,22 @@ async function fetchProfile() {
                 populateDashboard(data[0]);
                 fetchRecommendations();
             }
+        } else if (res.status === 401 || res.status === 403) {
+            console.warn("Session expired or unauthorized. Logging out locally.");
+            // Clear local storage and UI manually without hitting the logout endpoint again to avoid loop
+            currentUserId = null;
+            localStorage.removeItem('user_id');
+            localStorage.removeItem('username');
+            localStorage.removeItem('saved_resume_pdf');
+            document.getElementById('loginBtn').classList.remove('hidden');
+            document.getElementById('tab-saved').classList.add('hidden');
+            document.getElementById('tab-history').classList.add('hidden');
+            const profileControls = document.getElementById('userProfileControls');
+            profileControls.classList.add('hidden');
+            profileControls.classList.remove('flex');
+            document.getElementById('loggedInUser').innerText = "";
+            switchTab('dashboard');
+            showToast("Session expired. Please log in again.", "info");
         }
     } catch (e) {
         console.error("Error fetching profile", e);
@@ -106,57 +144,71 @@ function populateDashboard(profile) {
     const tbody = document.getElementById('skillsTableBody');
     tbody.innerHTML = '';
 
-    (profile.current_skills || []).forEach(skill => {
-        tbody.innerHTML += `<tr><td class="py-4 px-6">${skill}</td><td class="py-4 px-6"><span class="px-2.5 py-1 text-xs rounded-full bg-emerald-100 text-emerald-700">Proficient</span></td><td class="py-4 px-6">Ready</td></tr>`;
-    });
-    (profile.skill_gaps || []).forEach(gap => {
-        tbody.innerHTML += `
-                    <tr>
-                        <td class="py-4 px-6 font-medium text-gray-900">${gap}</td>
-                        <td class="py-4 px-6"><span class="px-2.5 py-1 text-xs rounded-full bg-rose-100 text-rose-700">Missing</span></td>
-                        <td class="py-4 px-6">
-                            <button onclick="searchOpportunity('${gap}')" class="text-indigo-600 hover:text-indigo-800 font-semibold underline text-sm transition-colors">
-                                Find ${gap} Courses &rarr;
-                            </button>
-                        </td>
-                    </tr>`;
-    });
+    if ((profile.current_skills && profile.current_skills.length > 0) || (profile.skill_gaps && profile.skill_gaps.length > 0)) {
+        (profile.current_skills || []).forEach(skill => {
+            tbody.innerHTML += `<tr><td class="py-4 px-6">${escapeHtml(skill)}</td><td class="py-4 px-6"><span class="px-2.5 py-1 text-xs rounded-full bg-emerald-100 text-emerald-700">Proficient</span></td><td class="py-4 px-6">Ready</td></tr>`;
+        });
+        (profile.skill_gaps || []).forEach(gap => {
+            tbody.innerHTML += `
+                        <tr>
+                            <td class="py-4 px-6 font-medium text-gray-900">${escapeHtml(gap)}</td>
+                            <td class="py-4 px-6"><span class="px-2.5 py-1 text-xs rounded-full bg-rose-100 text-rose-700">Missing</span></td>
+                            <td class="py-4 px-6">
+                                <button onclick="searchOpportunity('${encodeInlineValue(gap)}')" class="text-indigo-600 hover:text-indigo-800 font-semibold underline text-sm transition-colors">
+                                    Find ${escapeHtml(gap)} Courses &rarr;
+                                </button>
+                            </td>
+                        </tr>`;
+        });
+    } else {
+        tbody.innerHTML = `<tr><td colspan="3" class="py-12 px-6 text-center text-slate-400 bg-slate-50/30"><i class="fa-solid fa-microchip text-4xl mb-4 text-slate-300 block"></i>Upload resume to view AI analysis</td></tr>`;
+    }
 
     // Resume Builder
     const tipsList = document.getElementById('resumeTipsContainer');
     tipsList.innerHTML = '';
-    (profile.resume_improvements || []).forEach(tip => {
-        tipsList.innerHTML += `<li class="p-4 bg-indigo-50 border-l-4 border-indigo-500 text-sm text-indigo-900 rounded-r-lg font-medium shadow-sm">${tip}</li>`;
-    });
+
+    if (profile.resume_improvements && profile.resume_improvements.length > 0) {
+        profile.resume_improvements.forEach(tip => {
+            tipsList.innerHTML += `<li class="p-4 bg-indigo-50 border-l-4 border-indigo-500 text-sm text-indigo-900 rounded-r-lg font-medium shadow-sm">${escapeHtml(tip)}</li>`;
+        });
+    } else {
+        tipsList.innerHTML = `<li class="p-4 bg-gray-50 rounded-lg text-sm text-gray-700 border-l-4 border-indigo-500">Upload a resume to generate specific formatting and quantitative metric improvements.</li>`;
+    }
 
     // Mock Interview
     const interviewContainer = document.getElementById('interviewQuestionsContainer');
     interviewContainer.innerHTML = '';
-    (profile.interview_questions || []).forEach((q, idx) => {
-        // Escape quotes so we can pass the string nicely to submitInterviewAnswer
-        const escapedQ = q.replace(/'/g, "\\'").replace(/"/g, '&quot;');
-        interviewContainer.innerHTML += `
-            <div class="p-5 bg-white border border-gray-100 shadow-sm rounded-xl hover:shadow-md transition-shadow">
-                <span class="text-xs font-bold text-indigo-500 uppercase tracking-wider mb-2 block">Question ${idx + 1}</span>
-                <p class="text-sm font-semibold text-gray-800 mb-4">${q}</p>
-                <div class="flex flex-col space-y-3">
-                    <button id="btn-record-${idx}" onclick="toggleRecording(${idx})" class="w-fit bg-slate-50 hover:bg-rose-50 text-slate-600 hover:text-rose-600 border border-slate-200 hover:border-rose-200 px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center shadow-sm">
-                        <i id="icon-record-${idx}" class="fa-solid fa-microphone mr-2"></i> 
-                        <span id="text-record-${idx}">Record Answer</span>
-                    </button>
-                    <div id="transcript-container-${idx}" class="hidden bg-indigo-50/50 p-4 rounded-xl border border-indigo-100 relative">
-                        <p id="transcript-${idx}" class="text-sm text-slate-700 italic mb-3"></p>
-                        <button onclick="submitInterviewAnswer(${idx}, '${escapedQ}')" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-2 rounded-lg shadow-md transition-colors w-fit flex items-center">
-                            <i class="fa-solid fa-robot mr-2"></i> Evaluate
+    if (profile.interview_questions && profile.interview_questions.length > 0) {
+        (profile.interview_questions || []).forEach((q, idx) => {
+            // Escape quotes so we can pass the string nicely to submitInterviewAnswer
+            const encodedQ = encodeInlineValue(q);
+            interviewContainer.innerHTML += `
+                <div class="p-5 bg-white border border-gray-100 shadow-sm rounded-xl hover:shadow-md transition-shadow">
+                    <span class="text-xs font-bold text-indigo-500 uppercase tracking-wider mb-2 block">Question ${idx + 1}</span>
+                    <p class="text-sm font-semibold text-gray-800 mb-4">${escapeHtml(q)}</p>
+                    <div class="flex flex-col space-y-3">
+                        <button id="btn-record-${idx}" onclick="toggleRecording(${idx})" class="w-fit bg-slate-50 hover:bg-rose-50 text-slate-600 hover:text-rose-600 border border-slate-200 hover:border-rose-200 px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center shadow-sm">
+                            <i id="icon-record-${idx}" class="fa-solid fa-microphone mr-2"></i>
+                            <span id="text-record-${idx}">Record Answer</span>
                         </button>
+                        <div id="transcript-container-${idx}" class="hidden bg-indigo-50/50 p-4 rounded-xl border border-indigo-100 relative">
+                            <p id="transcript-${idx}" class="text-sm text-slate-700 italic mb-3"></p>
+                                <button onclick="submitInterviewAnswer(${idx}, '${encodedQ}')" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-2 rounded-lg shadow-md transition-colors w-fit flex items-center">
+                                <i class="fa-solid fa-robot mr-2"></i> Evaluate
+                            </button>
+                        </div>
+                        <div id="feedback-container-${idx}" class="hidden p-4 rounded-xl text-sm font-medium leading-relaxed"></div>
                     </div>
-                    <div id="feedback-container-${idx}" class="hidden p-4 rounded-xl text-sm font-medium leading-relaxed"></div>
-                </div>
-            </div>`;
-    });
+                </div>`;
+        });
+    } else {
+        interviewContainer.innerHTML = `<div class="p-4 bg-gray-50 rounded-lg text-sm text-gray-700 border-l-4 border-indigo-500">Upload your resume to formulate custom technical questions.</div>`;
+    }
 }
 
 function searchOpportunity(query) {
+    query = decodeURIComponent(query);
     switchTab('opportunities');
     document.getElementById('searchOpp').value = query;
     document.getElementById('typeOpp').value = "Course";
@@ -186,6 +238,7 @@ async function fetchDynamicTypes() {
         }
     } catch (e) {
         console.error("Error fetching opportunity types", e);
+        showToast("Backend server is currently offline. Some features may not load.", "error");
     }
 }
 
@@ -390,7 +443,10 @@ async function sendChat() {
     if (!msg) return;
 
     const history = document.getElementById('chatHistory');
-    history.innerHTML += `<div class="bg-indigo-600 text-white p-3 rounded-lg w-3/4 ml-auto text-right shadow-md mb-3">${msg}</div>`;
+    const userMessage = document.createElement('div');
+    userMessage.className = 'bg-indigo-600 text-white p-3 rounded-lg w-3/4 ml-auto text-right shadow-md mb-3';
+    userMessage.textContent = msg;
+    history.appendChild(userMessage);
     input.value = '';
     history.scrollTop = history.scrollHeight;
 
@@ -402,7 +458,10 @@ async function sendChat() {
             body: JSON.stringify({ message: msg })
         });
         const data = await res.json();
-        history.innerHTML += `<div class="bg-white p-3 rounded-lg border border-gray-100 w-3/4 shadow-md mb-3 text-gray-800 leading-relaxed">${data.response}</div>`;
+        const assistantMessage = document.createElement('div');
+        assistantMessage.className = 'bg-white p-3 rounded-lg border border-gray-100 w-3/4 shadow-md mb-3 text-gray-800 leading-relaxed';
+        assistantMessage.textContent = res.ok ? (data.response || 'No response received.') : (data.error || 'Unable to get a response.');
+        history.appendChild(assistantMessage);
         history.scrollTop = history.scrollHeight;
     } catch (e) {
         history.innerHTML += `<div class="bg-red-50 text-red-500 p-3 rounded-lg border w-3/4 shadow-sm mb-3">Error fetching response.</div>`;
@@ -460,8 +519,8 @@ async function fetchOpportunities(page = 1) {
     const sort = document.getElementById('sortOpp').value;
 
     let url = `${API_BASE_URL}/opportunities/?page=${page}&ordering=${sort}`;
-    if (search) url += `&search=${search}`;
-    if (type) url += `&type=${type}`;
+    if (search) url += `&search=${encodeURIComponent(search)}`;
+    if (type) url += `&type=${encodeURIComponent(type)}`;
 
     try {
         const res = await fetch(url, { credentials: 'include' });
@@ -482,19 +541,19 @@ async function fetchOpportunities(page = 1) {
                         <div class="bg-white p-6 md:p-8 rounded-3xl border border-gray-100 shadow-lg hover:shadow-xl flex flex-col justify-between transition-all duration-300 hover:-translate-y-1">
                             <div>
                                 <div class="flex justify-between items-start mb-4">
-                                    <span class="px-3 py-1 text-[10px] font-black uppercase tracking-wider rounded-full ${opp.is_free ? 'bg-emerald-100/50 text-emerald-700' : 'bg-amber-100/50 text-amber-700'}">${opp.stipend_or_cost}</span>
-                                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">${opp.opportunity_type}</span>
+                                    <span class="px-3 py-1 text-[10px] font-black uppercase tracking-wider rounded-full ${opp.is_free ? 'bg-emerald-100/50 text-emerald-700' : 'bg-amber-100/50 text-amber-700'}">${escapeHtml(opp.stipend_or_cost || 'Not specified')}</span>
+                                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">${escapeHtml(opp.opportunity_type || 'Opportunity')}</span>
                                 </div>
-                                <h4 class="text-xl font-extrabold text-slate-900 mb-2 leading-tight">${opp.title}</h4>
-                                <p class="text-xs text-indigo-500 font-bold mb-4 uppercase tracking-wide">${opp.provider} &bull; ${opp.mode} &bull; ${opp.location}</p>
-                                <p class="text-sm text-slate-500 font-medium mb-6 leading-relaxed">${opp.description.substring(0, 120)}...</p>
+                                <h4 class="text-xl font-extrabold text-slate-900 mb-2 leading-tight">${escapeHtml(opp.title || 'Untitled opportunity')}</h4>
+                                <p class="text-xs text-indigo-500 font-bold mb-4 uppercase tracking-wide">${escapeHtml(opp.provider || 'Unknown provider')} &bull; ${escapeHtml(opp.mode || 'Not specified')} &bull; ${escapeHtml(opp.location || 'Not specified')}</p>
+                                <p class="text-sm text-slate-500 font-medium mb-6 leading-relaxed">${escapeHtml((opp.description || '').substring(0, 120))}${opp.description && opp.description.length > 120 ? '...' : ''}</p>
                             </div>
                             <div class="pt-5 border-t border-slate-50 flex justify-between items-center relative z-10">
                                 <button onclick="toggleBookmark(${opp.id}, this)" class="w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-300 shadow-sm text-slate-400 bg-white border border-slate-200 hover:text-rose-500 hover:border-rose-200 hover:bg-rose-50">
                                     <i class="fa-regular fa-heart text-xl"></i>
                                 </button>
-                                ${opp.opportunity_type.toLowerCase() === 'job' || opp.opportunity_type.toLowerCase() === 'internship' ? `<button onclick="generateCoverLetter(${opp.id})" class="ml-3 flex-1 bg-white border border-indigo-100 hover:bg-indigo-50 text-indigo-600 text-sm font-bold px-3 py-3 rounded-xl transition-colors shadow-sm"><i class="fa-solid fa-pen-nib mr-2"></i> Cover Letter</button>` : ''}
-                                <a href="${opp.url}" target="_blank" class="flex-1 ml-3 text-center bg-gradient-to-r from-slate-800 to-slate-900 hover:from-indigo-600 hover:to-indigo-700 text-white text-sm font-bold px-4 py-3 rounded-xl transition-all duration-300 shadow-md hover:shadow-lg">Apply Now &rarr;</a>
+                                ${['job', 'internship'].includes((opp.opportunity_type || '').toLowerCase()) ? `<button onclick="generateCoverLetter(${opp.id})" class="ml-3 flex-1 bg-white border border-indigo-100 hover:bg-indigo-50 text-indigo-600 text-sm font-bold px-3 py-3 rounded-xl transition-colors shadow-sm"><i class="fa-solid fa-pen-nib mr-2"></i> Cover Letter</button>` : ''}
+                                <a href="${safeExternalUrl(opp.url)}" target="_blank" rel="noopener noreferrer" class="flex-1 ml-3 text-center bg-gradient-to-r from-slate-800 to-slate-900 hover:from-indigo-600 hover:to-indigo-700 text-white text-sm font-bold px-4 py-3 rounded-xl transition-all duration-300 shadow-md hover:shadow-lg">Apply Now &rarr;</a>
                             </div>
                         </div>
                     `;
@@ -509,7 +568,9 @@ async function fetchOpportunities(page = 1) {
             pag.innerHTML += `<button onclick="fetchOpportunities(${page + 1})" class="px-4 py-2 bg-white border border-gray-200 rounded-lg shadow-sm hover:bg-gray-50 font-medium text-sm transition-colors ml-2">Next</button>`;
         }
     } catch (e) {
-        console.error(e);
+        console.error("fetchOpportunities error:", e);
+        document.getElementById('schemesContainer').innerHTML = `<p class="text-sm text-rose-500 bg-rose-50 p-6 rounded-2xl border border-rose-100 text-center col-span-full">Servers are currently offline or unavailable. Please try again later.</p>`;
+        document.getElementById('paginationControls').innerHTML = '';
     }
 }
 
@@ -537,25 +598,25 @@ async function fetchRecommendations() {
                     <div class="relative z-10">
                         <div class="flex justify-between items-start mb-4">
                             <span class="px-3 py-1 text-[10px] font-black rounded-full bg-${scoreColor}-100/80 text-${scoreColor}-700 shadow-sm uppercase tracking-widest"><i class="fa-solid fa-bolt mr-1"></i> Match: ${score}%</span>
-                            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">${opp.opportunity_type}</span>
+                            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">${escapeHtml(opp.opportunity_type || 'Opportunity')}</span>
                         </div>
-                        <h4 class="text-xl font-extrabold text-slate-900 mb-2 leading-tight">${opp.title}</h4>
-                        <p class="text-xs text-indigo-500 font-bold mb-4 uppercase tracking-wide">${opp.provider} &bull; ${opp.mode}</p>
-                        <p class="text-sm text-slate-500 font-medium mb-4 leading-relaxed">${(opp.description || '').substring(0, 100)}...</p>
+                        <h4 class="text-xl font-extrabold text-slate-900 mb-2 leading-tight">${escapeHtml(opp.title || 'Untitled opportunity')}</h4>
+                        <p class="text-xs text-indigo-500 font-bold mb-4 uppercase tracking-wide">${escapeHtml(opp.provider || 'Unknown provider')} &bull; ${escapeHtml(opp.mode || 'Not specified')}</p>
+                        <p class="text-sm text-slate-500 font-medium mb-4 leading-relaxed">${escapeHtml((opp.description || '').substring(0, 100))}${opp.description && opp.description.length > 100 ? '...' : ''}</p>
                         <div class="bg-indigo-50/50 p-4 rounded-2xl border border-indigo-50 mb-6">
-                            <p class="text-xs text-indigo-700 italic font-semibold leading-relaxed">💡 ${match.reasoning}</p>
+                            <p class="text-xs text-indigo-700 italic font-semibold leading-relaxed">💡 ${escapeHtml(match.reasoning || 'No match explanation available.')}</p>
                         </div>
                     </div>
                     <div class="pt-5 border-t border-indigo-50 flex justify-between items-center relative z-10">
                         <button onclick="toggleBookmark(${opp.id}, this)" class="w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-300 shadow-sm ${match.is_bookmarked ? 'text-rose-500 bg-rose-50 hover:bg-rose-100 border border-rose-100' : 'text-slate-400 bg-white border border-slate-200 hover:text-rose-500 hover:border-rose-200 hover:bg-rose-50'}">
                             <i class="${match.is_bookmarked ? 'fa-solid' : 'fa-regular'} fa-heart text-xl"></i>
                         </button>
-                        ${(opp.opportunity_type.toLowerCase() === 'job' || opp.opportunity_type.toLowerCase() === 'internship') ?
+                        ${['job', 'internship'].includes((opp.opportunity_type || '').toLowerCase()) ?
                     (match.cover_letter ?
                         `<button onclick="generateCoverLetter(${opp.id})" class="ml-3 flex-1 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 text-emerald-700 text-sm font-bold px-3 py-3 rounded-xl transition-colors shadow-sm"><i class="fa-solid fa-file-lines mr-2"></i> View Cover Letter</button>` :
                         `<button onclick="generateCoverLetter(${opp.id})" class="ml-3 flex-1 bg-white border border-indigo-100 hover:bg-indigo-50 text-indigo-600 text-sm font-bold px-3 py-3 rounded-xl transition-colors shadow-sm"><i class="fa-solid fa-pen-nib mr-2"></i> Cover Letter</button>`
                     ) : ''}
-                        <a href="${opp.url}" target="_blank" class="flex-1 text-center bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-sm font-bold px-4 py-3 rounded-xl transition-all duration-300 shadow-md hover:shadow-lg ml-3">View &rarr;</a>
+                        <a href="${safeExternalUrl(opp.url)}" target="_blank" rel="noopener noreferrer" class="flex-1 text-center bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-sm font-bold px-4 py-3 rounded-xl transition-all duration-300 shadow-md hover:shadow-lg ml-3">View &rarr;</a>
                     </div>
                 </div>`;
         });
@@ -564,6 +625,10 @@ async function fetchRecommendations() {
         showToast(`Found ${allMatches.length} AI-matched opportunities tailored for you!`, 'success');
     } catch (e) {
         console.error('fetchRecommendations error:', e);
+        const container = document.getElementById('schemesContainer');
+        if (container) {
+            container.innerHTML = `<p class="text-sm text-rose-500 bg-rose-50 p-6 rounded-2xl border border-rose-100 text-center col-span-full">Servers are currently offline. Unable to load AI recommendations.</p>` + container.innerHTML;
+        }
     }
 }
 
@@ -596,27 +661,28 @@ async function fetchSavedOpportunities() {
                     <div class="absolute -right-8 -top-8 w-32 h-32 bg-rose-400 rounded-full opacity-5 blur-2xl pointer-events-none"></div>
                     <div class="relative z-10">
                         <div class="flex justify-between items-start mb-4">
-                            <span class="px-3 py-1 text-[10px] font-black uppercase tracking-wider rounded-full bg-emerald-100/50 text-emerald-700">${opp.stipend_or_cost}</span>
-                            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">${opp.opportunity_type}</span>
+                            <span class="px-3 py-1 text-[10px] font-black uppercase tracking-wider rounded-full bg-emerald-100/50 text-emerald-700">${escapeHtml(opp.stipend_or_cost || 'Not specified')}</span>
+                            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">${escapeHtml(opp.opportunity_type || 'Opportunity')}</span>
                         </div>
-                        <h4 class="text-xl font-extrabold text-slate-900 mb-2 leading-tight">${opp.title}</h4>
-                        <p class="text-xs text-indigo-500 font-bold mb-4 uppercase tracking-wide">${opp.provider}</p>
-                        <p class="text-sm text-slate-500 font-medium mb-6 leading-relaxed">${opp.description.substring(0, 120)}...</p>
+                        <h4 class="text-xl font-extrabold text-slate-900 mb-2 leading-tight">${escapeHtml(opp.title || 'Untitled opportunity')}</h4>
+                        <p class="text-xs text-indigo-500 font-bold mb-4 uppercase tracking-wide">${escapeHtml(opp.provider || 'Unknown provider')}</p>
+                        <p class="text-sm text-slate-500 font-medium mb-6 leading-relaxed">${escapeHtml((opp.description || '').substring(0, 120))}${opp.description && opp.description.length > 120 ? '...' : ''}</p>
                     </div>
                     <div class="pt-5 border-t border-slate-50 flex justify-between items-center relative z-10">
                         <button onclick="toggleBookmark(${opp.id}, this)" class="text-rose-500 hover:text-slate-400 text-sm font-bold px-3 py-3 transition-colors bg-rose-50 rounded-xl hover:bg-slate-50"><i class="fa-solid fa-heart mr-2"></i> Unsave</button>
-                        ${(opp.opportunity_type.toLowerCase() === 'job' || opp.opportunity_type.toLowerCase() === 'internship') ?
+                        ${['job', 'internship'].includes((opp.opportunity_type || '').toLowerCase()) ?
                     (match.cover_letter ?
                         `<button onclick="generateCoverLetter(${opp.id})" class="ml-3 flex-1 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 text-emerald-700 text-sm font-bold px-3 py-3 rounded-xl transition-colors shadow-sm"><i class="fa-solid fa-file-lines mr-2"></i> View Cover Letter</button>` :
                         `<button onclick="generateCoverLetter(${opp.id})" class="ml-3 flex-1 bg-white border border-indigo-100 hover:bg-indigo-50 text-indigo-600 text-sm font-bold px-3 py-3 rounded-xl transition-colors shadow-sm"><i class="fa-solid fa-pen-nib mr-2"></i> Cover Letter</button>`
                     ) : ''}
-                        <a href="${opp.url}" target="_blank" class="flex-1 text-center bg-gradient-to-r from-slate-800 to-slate-900 hover:from-indigo-600 hover:to-indigo-700 text-white text-sm font-bold px-4 py-3 rounded-xl transition-all duration-300 shadow-md hover:shadow-lg ml-3">Apply Now &rarr;</a>
+                        <a href="${safeExternalUrl(opp.url)}" target="_blank" rel="noopener noreferrer" class="flex-1 text-center bg-gradient-to-r from-slate-800 to-slate-900 hover:from-indigo-600 hover:to-indigo-700 text-white text-sm font-bold px-4 py-3 rounded-xl transition-all duration-300 shadow-md hover:shadow-lg ml-3">Apply Now &rarr;</a>
                     </div>
                 </div>
             `;
         });
     } catch (e) {
         console.error('fetchSavedOpportunities error:', e);
+        document.getElementById('savedContainer').innerHTML = `<p class="text-sm text-rose-500 bg-rose-50 p-6 rounded-2xl border border-rose-100 text-center col-span-full">Servers are currently offline or unavailable. Please try again later.</p>`;
     }
 }
 
@@ -646,19 +712,19 @@ async function fetchResumeHistory() {
             const scoreColor = item.readiness_score >= 70 ? 'text-emerald-500' : item.readiness_score >= 40 ? 'text-amber-500' : 'text-rose-500';
 
             // Generate skills badges (All, not sliced)
-            const currentSkillsHtml = (item.current_skills || []).map(s => `<span class="px-2 py-1 bg-indigo-50 text-indigo-600 text-xs rounded-md mr-2 mb-2 inline-block">${s}</span>`).join('');
-            const gapSkillsHtml = (item.skill_gaps || []).map(s => `<span class="px-2 py-1 bg-rose-50 text-rose-600 text-xs rounded-md mr-2 mb-2 inline-block">${s}</span>`).join('');
+            const currentSkillsHtml = (item.current_skills || []).map(s => `<span class="px-2 py-1 bg-indigo-50 text-indigo-600 text-xs rounded-md mr-2 mb-2 inline-block">${escapeHtml(s)}</span>`).join('');
+            const gapSkillsHtml = (item.skill_gaps || []).map(s => `<span class="px-2 py-1 bg-rose-50 text-rose-600 text-xs rounded-md mr-2 mb-2 inline-block">${escapeHtml(s)}</span>`).join('');
 
             // Skill Gap Analysis Table
             let skillGapTableRows = '';
             (item.skill_gaps || []).forEach(gap => {
                 skillGapTableRows += `
                     <tr>
-                        <td class="py-4 px-6 font-medium text-gray-900">${gap}</td>
+                        <td class="py-4 px-6 font-medium text-gray-900">${escapeHtml(gap)}</td>
                         <td class="py-4 px-6"><span class="px-2.5 py-1 text-xs rounded-full bg-rose-100 text-rose-700">Missing</span></td>
                         <td class="py-4 px-6">
-                            <button onclick="searchOpportunity('${gap}')" class="text-indigo-600 hover:text-indigo-800 font-semibold underline text-sm transition-colors">
-                                Find ${gap} Courses &rarr;
+                            <button onclick="searchOpportunity('${encodeInlineValue(gap)}')" class="text-indigo-600 hover:text-indigo-800 font-semibold underline text-sm transition-colors">
+                                Find ${escapeHtml(gap)} Courses &rarr;
                             </button>
                         </td>
                     </tr>`;
@@ -686,7 +752,7 @@ async function fetchResumeHistory() {
             // Resume Improvements List
             let improvementsHtml = '';
             (item.resume_improvements || []).forEach(tip => {
-                improvementsHtml += `<li class="p-4 bg-indigo-50 border-l-4 border-indigo-500 text-sm text-indigo-900 rounded-r-lg font-medium shadow-sm mb-2">${tip}</li>`;
+                improvementsHtml += `<li class="p-4 bg-indigo-50 border-l-4 border-indigo-500 text-sm text-indigo-900 rounded-r-lg font-medium shadow-sm mb-2">${escapeHtml(tip)}</li>`;
             });
             const improvementsSection = improvementsHtml ? `
                 <div class="mt-8 pt-6 border-t border-gray-100">
@@ -700,16 +766,16 @@ async function fetchResumeHistory() {
             // Mock Interview Questions
             let interviewHtml = '';
             (item.interview_questions || []).forEach((q, idx) => {
-                const escapedQ = q.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                const encodedQ = encodeInlineValue(q);
                 const uId = `hist-${historyIdx}-${idx}`; // Unique ID across all history elements
 
                 let savedFeedbackHtml = '';
                 if (item.interview_feedbacks && item.interview_feedbacks[q]) {
                     const savedData = item.interview_feedbacks[q];
-                    let formattedFeedback = savedData.feedback.replace(/\n/g, '<br/>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+                    let formattedFeedback = escapeHtml(savedData.feedback).replaceAll(/\n/g, '<br/>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
                     savedFeedbackHtml = `
                         <div class="mt-4 p-4 rounded-xl text-sm font-medium leading-relaxed bg-emerald-50 text-emerald-800 border border-emerald-100">
-                            <div class="mb-3 p-3 bg-white/50 rounded-lg italic text-gray-700"><strong>Your Answer:</strong> ${savedData.answer}</div>
+                            <div class="mb-3 p-3 bg-white/50 rounded-lg italic text-gray-700"><strong>Your Answer:</strong> ${escapeHtml(savedData.answer)}</div>
                             <i class="fa-solid fa-square-poll-vertical text-emerald-600 text-lg mb-2"></i><br/>${formattedFeedback}
                         </div>
                     `;
@@ -718,7 +784,7 @@ async function fetchResumeHistory() {
                 interviewHtml += `
                     <div class="p-5 bg-white border border-gray-100 shadow-sm rounded-xl hover:shadow-md transition-shadow mb-4">
                         <span class="text-xs font-bold text-indigo-500 uppercase tracking-wider mb-2 block">Question ${idx + 1}</span>
-                        <p class="text-sm font-semibold text-gray-800 mb-4">${q}</p>
+                        <p class="text-sm font-semibold text-gray-800 mb-4">${escapeHtml(q)}</p>
                         ${savedFeedbackHtml ? savedFeedbackHtml : `
                         <div class="flex flex-col space-y-3">
                             <button id="btn-record-${uId}" onclick="toggleRecording('${uId}')" class="w-fit bg-slate-50 hover:bg-rose-50 text-slate-600 hover:text-rose-600 border border-slate-200 hover:border-rose-200 px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center shadow-sm">
@@ -727,7 +793,7 @@ async function fetchResumeHistory() {
                             </button>
                             <div id="transcript-container-${uId}" class="hidden bg-indigo-50/50 p-4 rounded-xl border border-indigo-100 relative">
                                 <p id="transcript-${uId}" class="text-sm text-slate-700 italic mb-3"></p>
-                                <button onclick="submitInterviewAnswer('${uId}', '${escapedQ}', ${item.id})" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-2 rounded-lg shadow-md transition-colors w-fit flex items-center">
+                                <button onclick="submitInterviewAnswer('${uId}', '${encodedQ}', ${item.id})" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-2 rounded-lg shadow-md transition-colors w-fit flex items-center">
                                     <i class="fa-solid fa-robot mr-2"></i> Evaluate
                                 </button>
                             </div>
@@ -746,7 +812,7 @@ async function fetchResumeHistory() {
                 <div class="bg-white p-6 md:p-10 rounded-3xl border border-gray-100 shadow-sm hover:shadow-lg transition-all duration-300 relative overflow-hidden mb-8">
                     <div class="flex flex-col md:flex-row justify-between items-start mb-6 border-b border-gray-50 pb-6">
                         <div>
-                            <h4 class="text-2xl font-extrabold text-slate-900">${item.target_role || 'Target Role Not Set'}</h4>
+                            <h4 class="text-2xl font-extrabold text-slate-900">${escapeHtml(item.target_role || 'Target Role Not Set')}</h4>
                             <p class="text-sm text-slate-500 mt-2"><i class="fa-regular fa-calendar mr-2"></i> Analyzed on: ${date}</p>
                         </div>
                         <div class="flex flex-col items-end mt-4 md:mt-0">
@@ -772,7 +838,7 @@ async function fetchResumeHistory() {
                     ${item.resume_file ? `
                     <div class="mt-8 pt-6 border-t border-gray-50 flex justify-between items-center">
                         <span class="text-sm font-bold text-slate-500 uppercase tracking-widest"><i class="fa-solid fa-paperclip mr-2"></i> Original Document</span>
-                        <a href="${item.resume_file}" target="_blank" class="text-sm font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-4 py-2 rounded-lg transition-colors flex items-center shadow-sm">
+                        <a href="${safeExternalUrl(item.resume_file)}" target="_blank" rel="noopener noreferrer" class="text-sm font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-4 py-2 rounded-lg transition-colors flex items-center shadow-sm">
                             View PDF <i class="fa-solid fa-arrow-up-right-from-square ml-2"></i>
                         </a>
                     </div>` : ''}
@@ -830,7 +896,12 @@ async function toggleBookmark(oppId, btnElement) {
     } catch (e) {
         console.error(e);
         showToast('Failed to sync bookmark. Please try again.', 'error');
-        // Revert on failure... (omitted for brevity)
+        icon.classList.toggle('fa-solid', isCurrentlySaved);
+        icon.classList.toggle('fa-regular', !isCurrentlySaved);
+        btnElement.classList.toggle('text-rose-500', isCurrentlySaved);
+        btnElement.classList.toggle('text-gray-400', !isCurrentlySaved);
+        btnElement.classList.toggle('bg-rose-50', isCurrentlySaved);
+        btnElement.classList.toggle('bg-gray-50', !isCurrentlySaved);
     }
 }
 
@@ -855,7 +926,7 @@ async function generateCoverLetter(oppId) {
         if (res.ok) {
             content.innerText = data.cover_letter;
         } else {
-            content.innerHTML = `<div class="text-rose-500 text-center"><i class="fa-solid fa-triangle-exclamation mb-2 text-2xl"></i><p>${data.error || 'Failed to generate cover letter.'}</p></div>`;
+            content.innerHTML = `<div class="text-rose-500 text-center"><i class="fa-solid fa-triangle-exclamation mb-2 text-2xl"></i><p>${escapeHtml(data.error || 'Failed to generate cover letter.')}</p></div>`;
         }
     } catch (e) {
         console.error(e);
@@ -1035,6 +1106,8 @@ function stopRecording() {
 async function submitInterviewAnswer(idx, question, analysisId = null) {
     if (isRecording) stopRecording();
 
+    question = decodeURIComponent(question);
+
     const answer = document.getElementById(`transcript-${idx}`).innerText;
     if (!answer || answer.includes("Listening...")) {
         showToast("Please record a valid answer first.", "error");
@@ -1060,12 +1133,12 @@ async function submitInterviewAnswer(idx, question, analysisId = null) {
         if (res.ok) {
             feedbackContainer.classList.add('bg-emerald-50', 'text-emerald-800', 'border', 'border-emerald-100');
             // Bold the specific keywords Gemini tends to use (Rating, Good, Missing)
-            let formattedFeedback = data.feedback.replace(/\n/g, '<br/>');
+            let formattedFeedback = escapeHtml(data.feedback || 'No feedback received.').replaceALL(/\n/g, '<br/>');
             formattedFeedback = formattedFeedback.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
             feedbackContainer.innerHTML = `<i class="fa-solid fa-square-poll-vertical text-emerald-600 text-lg mb-2"></i><br/>${formattedFeedback}`;
         } else {
             feedbackContainer.classList.add('bg-rose-50', 'text-rose-800');
-            feedbackContainer.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> ${data.error}`;
+            feedbackContainer.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> ${escapeHtml(data.error || 'Unable to evaluate answer.')}`;
         }
     } catch (e) {
         console.error(e);
