@@ -1,3 +1,7 @@
+import json
+import os
+
+from django.conf import settings
 from django.core.management.base import BaseCommand
 
 from career_app.models import (
@@ -9,84 +13,68 @@ from career_app.models import (
 
 
 class Command(BaseCommand):
-    help = (
-        "Seeds the database with essential Career Roles, Skills, Courses, and Questions"
-    )
+    help = "Seeds the database with essential Career Roles, Skills, Courses and Interview Questions from JSON"
+
+    def add_arguments(self, parser):
+        parser.add_argument(
+            '--file',
+            type=str,
+            help='Path to the JSON file containing core career data',
+            default=os.path.join(
+                settings.BASE_DIR,
+                'career-readiness-platform',
+                'Additional Scripts',
+                'core_career_data.json'
+            )
+        )
 
     def handle(self, *args, **kwargs):
-        # Data Scientist
-        ds, _ = CareerRole.objects.get_or_create(title="Data Scientist")
-        skills_ds = [
-            "Python",
-            "Machine Learning",
-            "SQL",
-            "Data Analysis",
-            "Deep Learning",
-        ]
-        for s in skills_ds:
-            RoleSkill.objects.get_or_create(role=ds, skill_name=s)
-            CourseRecommendation.objects.get_or_create(
-                skill_name=s,
-                defaults={
-                    "provider": "Coursera / NPTEL",
-                    "course_title": f"Advanced {s} Specialization",
-                },
-            )
+        json_file_path = kwargs['file']
 
-        qs_ds = [
-            "Explain the bias-variance tradeoff.",
-            "How do you handle missing data in a dataset?",
-            "Describe a time you used machine learning to solve a real problem.",
-            "What is the difference between supervised and unsupervised learning?",
-            "How do you evaluate a model's performance?",
-        ]
-        for q in qs_ds:
-            InterviewQuestion.objects.get_or_create(role=ds, question_text=q)
+        if not os.path.exists(json_file_path):
+            self.stdout.write(self.style.ERROR(
+                f"Data file not found: {json_file_path}"))
+            return
 
-        # Software Engineer
-        se, _ = CareerRole.objects.get_or_create(title="Software Engineer")
-        skills_se = ["Python", "Java", "React", "Docker", "Algorithms", "Git"]
-        for s in skills_se:
-            RoleSkill.objects.get_or_create(role=se, skill_name=s)
-            CourseRecommendation.objects.get_or_create(
-                skill_name=s,
-                defaults={
-                    "provider": "Udemy / SWAYAM",
-                    "course_title": f"Mastering {s}",
-                },
-            )
+        with open(json_file_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
 
-        qs_se = [
-            "What is the difference between a process and a thread?",
-            "Explain how you would design a URL shortener.",
-            "Describe your experience with CI/CD pipelines.",
-            "How do you handle merge conflicts in Git?",
-            "What are the SOLID principles?",
-        ]
-        for q in qs_se:
-            InterviewQuestion.objects.get_or_create(role=se, question_text=q)
+        for item in data:
+            target_role = item.get("target_role")
+            if not target_role:
+                continue
 
-        # Data Analyst
-        da, _ = CareerRole.objects.get_or_create(title="Data Analyst")
-        skills_da = ["SQL", "Excel", "Tableau", "PowerBI", "Python"]
-        for s in skills_da:
-            RoleSkill.objects.get_or_create(role=da, skill_name=s)
-            CourseRecommendation.objects.get_or_create(
-                skill_name=s,
-                defaults={
-                    "provider": "Google / NPTEL",
-                    "course_title": f"{s} for Data Analysts",
-                },
-            )
+            role_obj, _ = CareerRole.objects.get_or_create(title=target_role)
 
-        qs_da = [
-            "How do you perform a JOIN in SQL?",
-            "Explain a complex dashboard you built.",
-            "How do you handle outliers in data?",
-            "What is a pivot table?",
-            "Describe your experience with data cleaning.",
-        ]
-        for q in qs_da:
-            InterviewQuestion.objects.get_or_create(role=da, question_text=q)
+            mandatory_skills = item.get("mandatory_skills", [])
+            for skill in mandatory_skills:
+                RoleSkill.objects.get_or_create(
+                    role=role_obj, skill_name=skill)
 
-        self.stdout.write(self.style.SUCCESS("Successfully seeded database!"))
+            recommended_courses = item.get("recommended_courses", [])
+            for i, course in enumerate(recommended_courses):
+                # If there are courses, assign them to the first few skills
+                # (or just the first skill if it's general)
+                target_skill = mandatory_skills[i % len(
+                    mandatory_skills)] if mandatory_skills else "General"
+                CourseRecommendation.objects.get_or_create(
+                    skill_name=target_skill,
+                    course_title=course.get("course_name", "Unknown Course"),
+                    defaults={
+                        "provider": course.get("provider", "Unknown Provider"),
+                    }
+                )
+
+            # Seed interview questions from JSON, with fallback
+            interview_questions = item.get("interview_questions", [])
+            if not interview_questions:
+                interview_questions = [
+                    f"What is your experience with {skill}?" for skill in mandatory_skills[:3]
+                ]
+
+            for q in interview_questions:
+                InterviewQuestion.objects.get_or_create(
+                    role=role_obj, question_text=q)
+
+        self.stdout.write(self.style.SUCCESS(
+            "Successfully seeded database from JSON!"))

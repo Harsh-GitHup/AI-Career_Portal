@@ -2,7 +2,7 @@ import logging
 import re
 from collections import Counter
 
-from .models import CareerRole, CourseRecommendation
+from .models import CareerRole, CourseRecommendation, InterviewQuestion, RoleSkill
 
 logger = logging.getLogger(__name__)
 
@@ -73,8 +73,7 @@ class LocalNLPResumeParser:
                         return clean_name.title()
 
         # Basic parsing fallback if SpaCy fails or isn't loaded yet
-        lines = [line.strip()
-                 for line in self.text.split("\n") if line.strip()]
+        lines = [line.strip() for line in self.text.split("\n") if line.strip()]
         if not lines:
             return "Unknown Candidate"
         for line in lines[:5]:
@@ -115,33 +114,17 @@ class LocalNLPResumeParser:
 
     def determine_roles(self, skills: list[str]) -> list[str]:
         roles = CareerRole.objects.all()
-        candidate_labels = (
-            [r.title for r in roles]
-            if len(roles) > 5
-            else [
-                "Data Scientist",
-                "Software Engineer",
-                "Product Manager",
-                "Data Analyst",
-                "Frontend Developer",
-                "Backend Developer",
-                "UI/UX Designer",
-                "DevOps Engineer",
-                "Machine Learning Engineer",
-            ]
-        )
+        candidate_labels = [r.title for r in roles]
+
+        if not candidate_labels:
+            candidate_labels = ["Software Engineer", "Data Analyst"]
 
         classifier = get_zero_shot()
         if classifier and self.text:
             # Use HuggingFace zero-shot semantic classification to deeply understand the text
             # We take the first 1000 chars to avoid memory/token limits
             result = classifier(self.text[:1000], candidate_labels)
-            # Filter labels with meaningful confidence scores
-            top_roles = [
-                label
-                for label, score in zip(result["labels"], result["scores"])
-                if score > 0.15
-            ][:3]
+            top_roles = result["labels"][:5]
             if top_roles:
                 return top_roles
 
@@ -153,8 +136,11 @@ class LocalNLPResumeParser:
             overlap = len(skill_lower.intersection(set(role_skills)))
             scores[role.title] = overlap
 
-        top_roles = [role for role,
-                     score in scores.most_common(3) if score > 0]
+        top_roles = [role for role, score in scores.most_common(5) if score > 0]
+
+        if not top_roles and candidate_labels:
+            return candidate_labels[:3]
+
         return top_roles
 
     def find_gaps_and_courses(self, top_role: str, current_skills: list[str]):
@@ -162,17 +148,20 @@ class LocalNLPResumeParser:
             role_obj = CareerRole.objects.get(title=top_role)
             required = {s.skill_name.lower() for s in role_obj.skills.all()}
         except CareerRole.DoesNotExist:
-            generic_skills = [
-                "Data Analysis",
-                "Cloud Computing",
-                "System Design",
-                "Agile Methodologies",
-                "Communication",
-                "Problem Solving",
-            ]
+            db_skills = RoleSkill.objects.values_list(
+                "skill_name", flat=True
+            ).distinct()[:10]
+            generic_skills = (
+                [s for s in db_skills]
+                if db_skills
+                else ["Communication", "Problem Solving"]
+            )
+
             current = {s.lower() for s in current_skills}
             missing = [s for s in generic_skills if s.lower() not in current]
-            return missing[:5], [f"Coursera: {m} Masterclass" for m in missing[:5]]
+            return missing[:5], [
+                f"Online Platform: {m} Masterclass" for m in missing[:5]
+            ]
 
         current = {s.lower() for s in current_skills}
         missing = list(required - current)[:5]
@@ -180,8 +169,7 @@ class LocalNLPResumeParser:
         gaps = [s.title() for s in missing]
         courses = []
         for m in missing:
-            course = CourseRecommendation.objects.filter(
-                skill_name__iexact=m).first()
+            course = CourseRecommendation.objects.filter(skill_name__iexact=m).first()
             if course:
                 courses.append(f"{course.provider}: {course.course_title}")
 
@@ -195,6 +183,9 @@ class LocalNLPResumeParser:
                 raise CareerRole.DoesNotExist
             return questions
         except CareerRole.DoesNotExist:
+            db_qs = InterviewQuestion.objects.order_by("?")[:5]
+            if db_qs:
+                return [q.question_text for q in db_qs]
             return [
                 f"Can you describe your experience with technologies related to {top_role}?",
                 "What is the most challenging project you've worked on recently?",
@@ -212,8 +203,7 @@ class LocalNLPResumeParser:
         return improvements
 
     def _extract_section(self, section_name: str) -> list[str]:
-        lines = [line.strip()
-                 for line in self.text.split("\n") if line.strip()]
+        lines = [line.strip() for line in self.text.split("\n") if line.strip()]
         in_section = False
         content = []
         for line in lines:
