@@ -7,8 +7,6 @@ from langchain_community.document_loaders import PyPDFLoader
 from langchain_google_genai import ChatGoogleGenerativeAI
 from pydantic import BaseModel, Field
 
-from .local_nlp import LocalNLPResumeParser
-
 logger = logging.getLogger(__name__)
 load_dotenv()
 
@@ -18,7 +16,7 @@ class ResumeAnalysis(BaseModel):
         default="Candidate", description="Full name detected on the resume"
     )
     target_professions: list[str] = Field(
-        description="Top 3 recommended career roles based on resume profile"
+        description="Top 5 recommended career roles based on resume profile"
     )
     extracted_skills: list[str] = Field(
         description="Normalized list of hard and soft technical skills"
@@ -30,10 +28,10 @@ class ResumeAnalysis(BaseModel):
         description="Direct names of government or university certified courses"
     )
     resume_improvements: list[str] = Field(
-        description="3 actionable, specific bullet suggestions to improve resume presentation"
+        description="5 actionable, specific bullet suggestions to improve resume presentation"
     )
     interview_questions: list[str] = Field(
-        description="5 technical and behavioral interview questions tailored to the resume"
+        description="10 technical and behavioral interview questions tailored to the resume"
     )
     summary: str = Field(
         default="", description="A short professional summary of the candidate"
@@ -80,12 +78,12 @@ def analyze_resume(uploaded_file_bytes: bytes) -> ResumeAnalysis:
             prompt = f"""
             Analyze the following resume text strictly and return clean structured data.
             1. Detect the candidate's name or assign 'Student'.
-            2. Determine the top 3 best matching job titles/professions.
+            2. Determine the top 5 best matching job titles/professions.
             3. Extract all explicit skills demonstrated in the projects and experience sections.
-            4. Detect 4 to 6 critical industry skill gaps needed to succeed in their primary target role.
+            4. Detect 5 to 10 critical industry skill gaps needed to succeed in their primary target role.
             5. Suggest actual SWAYAM/NPTEL certified courses for those gaps.
-            6. Provide 3 high-impact resume enhancement recommendations.
-            7. Provide 5 realistic interview practice questions.
+            6. Provide 5 high-impact resume enhancement recommendations.
+            7. Provide 10 realistic interview practice questions.
             8. Extract a short professional summary.
             9. Extract all project details.
             10. Extract all work experience.
@@ -96,48 +94,10 @@ def analyze_resume(uploaded_file_bytes: bytes) -> ResumeAnalysis:
             """
             return structured_llm.invoke(prompt)
         except Exception as e:  # noqa: BLE001
-            logger.warning(
-                f"LLM API Error (falling back to local parser): {e}")
-
-    # --- FALLBACK: Use the custom local model instead of the API ---
-    logger.info("Using LocalNLPResumeParser fallback.")
-    model = LocalNLPResumeParser(resume_text)
-
-    name = model.extract_name()
-    skills = model.extract_skills()
-    roles = model.determine_roles(skills)
-
-    gaps, courses, questions = [], [], []
-    for role in roles:
-        r_gaps, r_courses = model.find_gaps_and_courses(role, skills)
-        gaps.extend(r_gaps)
-        courses.extend(r_courses)
-        questions.extend(model.generate_interview_qs(role))
-
-    gaps = list(dict.fromkeys(gaps))[:5]
-    courses = list(dict.fromkeys(courses))[:5]
-    questions = list(dict.fromkeys(questions))[:5]
-
-    improvements = model.get_improvements(gaps)
-
-    summary = model.extract_summary()
-    projects = model.extract_projects()
-    experience = model.extract_experience()
-    academics = model.extract_academic_records()
-
-    return ResumeAnalysis(
-        full_name=name,
-        target_professions=roles,
-        extracted_skills=skills,
-        skill_gaps=gaps,
-        recommended_courses=courses,
-        resume_improvements=improvements,
-        interview_questions=questions,
-        summary=summary,
-        projects=projects,
-        experience=experience,
-        academic_records=academics,
-    )
+            logger.error(f"LLM API Error: {e}")
+            raise RuntimeError(f"AI Analysis Failed: {str(e)}. Please check your API configuration or try again.") from e
+    else:
+        raise RuntimeError("AI Analysis Failed: GOOGLE_API_KEY is not set in the environment variables.")
 
 
 def calculate_opportunity_relevance(

@@ -131,13 +131,13 @@ class UploadResumeAPIView(APIView):
                         graduation_year=int(record.get("graduation_year", 2024)),
                         cgpa=float(record.get("cgpa", 0.0)),
                     )
-                except Exception as e:
+                except Exception as e:  # noqa: BLE001
                     logger.warning(f"Failed to save academic record {record}: {e}")
 
             # 3. Trigger Celery Asynchronous Scraper (which chains match scoring)
             try:
                 run_universal_scraper.delay(profile.id)
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 logger.warning(f"Background tasks skipped (Redis may be down): {e}")
 
             return Response(
@@ -167,7 +167,7 @@ class UploadResumeAPIView(APIView):
                 status=status.HTTP_200_OK,
             )
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             traceback.print_exc()
             error_msg = str(e)
             status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -248,7 +248,7 @@ class OpportunityListAPIView(generics.ListAPIView):
             """
             # Note: We rely on the Celery background worker to populate opportunities.
             # Inline blocking scraping is removed to prevent 'database is locked' errors on SQLite.
-            pass
+            pass  # noqa: PIE790
 
         qs = Opportunity.objects.filter(is_active=True)
         opp_type = self.request.query_params.get("type")
@@ -280,7 +280,9 @@ class RecommendedMatchesAPIView(APIView):
         try:
             profile = StudentProfile.objects.get(user=request.user)
         except StudentProfile.DoesNotExist:
-            profile = StudentProfile.objects.create(user=request.user, target_role="Undecided")
+            profile = StudentProfile.objects.create(
+                user=request.user, target_role="Undecided"
+            )
 
         matches = ProfileMatch.objects.filter(profile=profile).select_related(
             "opportunity"
@@ -312,7 +314,7 @@ class SocialLoginAPIView(APIView):
             email = idinfo["email"]
             name = idinfo.get("name", "Student")
 
-            user, created = User.objects.get_or_create(
+            user, _created = User.objects.get_or_create(
                 username=email, defaults={"email": email, "first_name": name}
             )
             login(request, user)
@@ -353,7 +355,7 @@ class ChatbotAPIView(APIView):
             try:
                 response = llm.invoke(f"{context_msg}\n\nUser: {message}\nAI:")
                 return Response({"response": response.content})
-            except Exception as e:
+            except Exception:  # noqa: BLE001, S110
                 # API failed (likely 429 quota exhausted). Fallback to local heuristic.
                 pass
 
@@ -459,8 +461,10 @@ class ToggleBookmarkAPIView(APIView):
 
     def post(self, request, opp_id, *args, **kwargs):
         opportunity = get_object_or_404(Opportunity, id=opp_id)
-        profile, _ = StudentProfile.objects.get_or_create(user=request.user, defaults={"target_role": "Undecided"})
-        match, created = ProfileMatch.objects.get_or_create(
+        profile, _ = StudentProfile.objects.get_or_create(
+            user=request.user, defaults={"target_role": "Undecided"}
+        )
+        match, _created = ProfileMatch.objects.get_or_create(
             profile=profile,
             opportunity=opportunity,
             defaults={
@@ -483,7 +487,7 @@ class GenerateCoverLetterAPIView(APIView):
         profile = get_object_or_404(StudentProfile, user=request.user)
 
         # Check if we already have a generated cover letter for this match
-        match, created = ProfileMatch.objects.get_or_create(
+        match, _created = ProfileMatch.objects.get_or_create(
             profile=profile,
             opportunity=opportunity,
             defaults={
@@ -537,7 +541,7 @@ class GenerateCoverLetterAPIView(APIView):
             match.save(update_fields=["cover_letter"])
 
             return Response({"cover_letter": cover_letter}, status=status.HTTP_200_OK)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             error_str = str(e).lower()
             if "503" in error_str or "unavailable" in error_str:
                 return Response(
@@ -554,7 +558,7 @@ class GenerateCoverLetterAPIView(APIView):
                     status=status.HTTP_429_TOO_MANY_REQUESTS,
                 )
             return Response(
-                {"error": f"Failed to generate cover letter: {str(e)}"},
+                {"error": f"Failed to generate cover letter: {e!s}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
@@ -591,7 +595,7 @@ class InterviewEvaluationAPIView(APIView):
         Question: {question}
         Candidate's Answer: {answer}
         
-        Evaluate the candidate's answer. Provide concise, constructive feedback (2-3 sentences). 
+        Evaluate the candidate's answer. Provide concise, constructive feedback (5-6 sentences). 
         Identify what was good, what was missing, and give a rating out of 10.
         Format your response nicely.
         """
@@ -628,7 +632,7 @@ class InterviewEvaluationAPIView(APIView):
                     pass  # Silently ignore if not found
 
             return Response({"feedback": feedback}, status=status.HTTP_200_OK)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             error_str = str(e).lower()
             if "503" in error_str or "unavailable" in error_str:
                 return Response(
@@ -645,6 +649,6 @@ class InterviewEvaluationAPIView(APIView):
                     status=status.HTTP_429_TOO_MANY_REQUESTS,
                 )
             return Response(
-                {"error": f"Failed to evaluate answer: {str(e)}"},
+                {"error": f"Failed to evaluate answer: {e!s}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
