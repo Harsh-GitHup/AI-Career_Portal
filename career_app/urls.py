@@ -4,6 +4,7 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     AcademicRecordViewSet,
     ChatbotAPIView,
+    CoverLetterHistoryAPIView,
     GenerateCoverLetterAPIView,
     InterviewEvaluationAPIView,
     LoginAPIView,
@@ -30,6 +31,11 @@ urlpatterns = [
         "resume-history/",
         ResumeAnalysisHistoryAPIView.as_view(),
         name="api_resume_history",
+    ),
+    path(
+        "cover-letter-history/",
+        CoverLetterHistoryAPIView.as_view(),
+        name="api_cover_letter_history",
     ),
     path("opportunities/", OpportunityListAPIView.as_view(), name="api_opportunities"),
     path(

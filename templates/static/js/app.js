@@ -845,9 +845,55 @@ async function fetchResumeHistory() {
                 </div>
             `;
         });
+
+        await fetchCoverLetterHistory();
     } catch (e) {
         console.error('fetchResumeHistory error:', e);
         document.getElementById('historyContainer').innerHTML = `<p class="text-sm text-red-500 bg-white p-6 rounded-2xl border border-red-100 text-center">Error loading history.</p>`;
+    }
+}
+
+async function fetchCoverLetterHistory() {
+    try {
+        const res = await fetch(`${API_BASE_URL}/cover-letter-history/`, {
+            credentials: 'include'
+        });
+        if (!res.ok) throw new Error('Failed to fetch cover letter history');
+        const responseData = await res.json();
+        const data = responseData.results || responseData;
+
+        const container = document.getElementById('coverLetterHistoryContainer');
+        container.innerHTML = '';
+
+        if (data.length === 0) {
+            container.innerHTML = `<p class="text-sm text-gray-500 bg-white p-6 rounded-2xl border border-gray-100 text-center col-span-full">No cover letters found. Generate one for a job to see it here.</p>`;
+            return;
+        }
+
+        data.forEach(match => {
+            const opp = match.opportunity;
+            const date = new Date(match.created_at || new Date()).toLocaleDateString();
+            container.innerHTML += `
+                <div class="bg-white p-6 rounded-2xl border border-emerald-100 shadow-sm hover:shadow-md transition-all">
+                    <div class="flex justify-between items-start mb-4">
+                        <span class="text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full"><i class="fa-solid fa-file-contract mr-1"></i> Cover Letter</span>
+                        <span class="text-xs font-medium text-slate-400">${date}</span>
+                    </div>
+                    <h4 class="text-lg font-bold text-slate-900 mb-1">${escapeHtml(opp.title)}</h4>
+                    <p class="text-xs font-semibold text-indigo-500 uppercase tracking-wide mb-4">${escapeHtml(opp.provider)}</p>
+                    <div class="bg-slate-50 p-4 rounded-xl text-sm text-slate-600 mb-4 line-clamp-3 h-24 overflow-hidden relative">
+                        <div class="absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-slate-50 to-transparent"></div>
+                        ${escapeHtml(match.cover_letter)}
+                    </div>
+                    <button onclick="generateCoverLetter(${opp.id})" class="w-full bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-sm font-bold py-3 rounded-xl transition-colors">
+                        Read Full Letter &rarr;
+                    </button>
+                </div>
+            `;
+        });
+    } catch (e) {
+        console.error('fetchCoverLetterHistory error:', e);
+        document.getElementById('coverLetterHistoryContainer').innerHTML = `<p class="text-sm text-red-500 bg-white p-6 rounded-2xl border border-red-100 text-center col-span-full">Error loading cover letters.</p>`;
     }
 }
 

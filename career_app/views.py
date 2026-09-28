@@ -211,6 +211,20 @@ class ResumeAnalysisHistoryAPIView(generics.ListAPIView):
         )
 
 
+class CoverLetterHistoryAPIView(generics.ListAPIView):
+    """Fetch all past generated cover letters for the logged-in user."""
+
+    serializer_class = ProfileMatchSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return (
+            ProfileMatch.objects.filter(profile__user=self.request.user)
+            .exclude(cover_letter="")
+            .order_by("-created_at")
+        )
+
+
 class OpportunityListAPIView(generics.ListAPIView):
     """Search and filter catalog of opportunities."""
 
