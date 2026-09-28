@@ -1,88 +1,174 @@
-# CareerAI - AI Career Portal
+# 🚀 CareerAI - AI Career Portal
 
-CareerAI is a Django and Django REST Framework application that helps students and professionals analyze resumes, identify skill gaps, find career opportunities, and prepare for interviews.
+CareerAI is a Django and Django REST Framework application for resume analysis, career readiness, opportunity discovery, interview preparation, and personalized career guidance.
 
-> The active application uses a static HTML/CSS/JavaScript interface in `templates/` and a Python API in `career_app/`.
+This document is the updated project guide for the active root application. The active application consists of the Django backend in `career_app/` and `core_project/`, plus the vanilla HTML/CSS/JavaScript frontend in `templates/`.
 
-## 🚀 Features
+> `career-readiness-platform/` is archived/reference material and is not the frontend launched by the root Django project.
 
-- **Hybrid AI Resume Parsing Pipeline:**
-  - **Primary Inference:** Gemini 3.8 Flash LLM for zero-shot resume analysis, structured data extraction (skills, matching roles, missing technical gaps, dynamic interview questions, and 3 actionable resume improvement tips).
-  - **Robust Offline Fallback:** If the external API quota is exceeded or unavailable, the system automatically falls back to a locally processed ML pipeline. It uses HuggingFace `transformers` (`distilbert-base-uncased-mnli`) for zero-shot role classification, `spaCy` (`en_core_web_sm`) for Named Entity Recognition and syntactic noun chunking (skill extraction), and `sentence-transformers`.
-- **Universal Opportunity Hub & Scraper:**
-  - Asynchronous background scrapers utilizing `BeautifulSoup4`, `httpx`, and Google Dorks to bypass bot-blockers.
-  - Aggregates Live Jobs (LinkedIn, Naukri, Adzuna API), Internships (Internshala, AICTE), Government Schemes (MMSKY), and Free Video Courses (NPTEL, YouTube Data API v3).
-  - Implements smart deduplication using SHA-256 URL hashing.
-- **Smart Interview Simulator & Audio Integration:**
-  - Automatically analyzes resumes to dynamically generate 5 targeted technical and behavioral interview questions tailored precisely to the user's skillset and desired role.
-  - Includes an Audio Interview Simulator powered directly by frontend `webkitSpeechRecognition` APIs for mock interviews.
-- **Personalized Chatbot Assistant:**
-  - Context-aware CareerAI assistant initialized with the user's career profile (target roles, existing skills) to provide hyper-specific, contextual career guidance instead of generic answers.
-- **Document Viewer (PDF.js):**
-  - Fully integrated `PDF.js` canvas renderer with customized dark-mode scrollbars (glassmorphism UI) for seamless resume previewing, replacing standard browser `iframe` rendering constraints.
-- **Automated Cover Letter Generation:**
-  - Leverages AI to draft professional, role-specific cover letters by cross-referencing the candidate's extracted profile with the scraped Opportunity descriptions.
-- **Multilingual Support (Hindi Translation):**
-  - Includes integrated Google Translate functionality (via custom `skiptranslate` CSS overrides) to seamlessly toggle the entire application interface and AI insights between English and Hindi, ensuring accessibility for a broader demographic.
-- **Authentication Security:**
-  - Secure, decoupled CSRF-exempt authentication bridging the gap between the static HTML frontend and the Django REST API backend, complete with Google OAuth support (`SocialLoginAPIView`).
+## ✨ What's New
 
-## 🏗️ Architecture & Technology Stack
+The current project includes the following updates beyond the original README:
 
-- **Backend Engine:** Python 3.11+, Django 5.x, Django REST Framework
-- **Frontend UI:** Vanilla HTML/CSS/JS, Custom Tailwind-inspired CSS tokens, CSS Grid/Flexbox, Glassmorphism UI elements, Font Awesome, and PDF.js
-- **Database Layer:** SQLite (default for development), ORM easily migratable to MySQL/PostgreSQL
-- **Task Queue & Caching:** Celery 5.4 + Redis (For non-blocking AI inference and web scraping)
-- **Web scraping:** Adzuna, YouTube Data API v3, LinkedIn, and Instaloader
-- **AI/ML Tooling:** LangChain, Google GenAI SDK, Google Gemini, Pydantic, PyPDF, PyTorch, Transformers, spaCy, Scikit-learn
-- **Package Management:** `uv` (Lightning-fast Python dependency resolving and syncing)
+- Added authenticated profile and academic-record CRUD endpoints through Django REST Framework routers.
+- Added resume-analysis history with uploaded resume files, extracted projects, work experience, academic records, readiness scores, and interview feedback storage.
+- Added cover-letter history and persistent cover letters on profile matches.
+- Added dynamic opportunity type loading and filtering by type, search text, and free/paid status.
+- Added ranked recommendation responses separated into opportunities and government schemes.
+- Added bookmark toggling for authenticated users.
+- Added Gemini-powered chatbot, cover-letter generation, and interview evaluation with local offline fallbacks when the provider is unavailable or no API key is configured.
+- Added contextual chatbot prompts using the user's role, skills, skill gaps, and top matched opportunities.
+- Added a local resume-processing path using PDF extraction, NLP, role classification, skill-gap analysis, recommendations, and tailored interview questions.
+- Added PDF.js canvas rendering for the latest uploaded resume preview.
+- Added browser speech-recognition support for mock interview answers where supported by the browser.
+- Added Google login token verification and session-based login, registration, and logout flows.
+- Added frontend escaping and URL validation helpers for API and user-generated content rendering.
+- Added structured application logging and production-only cookie, clickjacking, content-type, and HTTPS security settings.
+- Added seeded career roles, role skills, course recommendations, and interview questions through the `seed_db` management command.
+- Kept asynchronous scraping and profile matching behind Celery so opportunity search does not perform blocking scraping inside the request.
+
+## 🌟 Main Features
+
+### 📄 Resume intelligence
+
+- Upload a PDF resume through the frontend or `POST /api/upload-resume/`.
+- Use Gemini when `GOOGLE_API_KEY` is configured.
+- Fall back to local processing when Gemini is unavailable, rate-limited, or not configured.
+- Extract candidate name, summary, target professions, skills, skill gaps, projects, experience, academic records, resume improvements, and interview questions.
+- Calculate a readiness score from the detected skill gaps and store the latest profile state.
+- Preserve authenticated analyses in resume history.
+
+### 🌐 Opportunity hub
+
+- Display jobs, internships, courses, government schemes, fellowships, and other normalized opportunities.
+- Filter opportunities by search text, opportunity type, and free/paid status.
+- Deduplicate normalized records using a SHA-256 URL hash.
+- Run external scraping and matching asynchronously through Celery.
+- Show ranked profile matches with matching skills and reasoning.
+- Bookmark matches and generate a role-specific cover letter for a selected opportunity.
+
+### 🎤 Interview preparation
+
+- Generate resume-specific technical and behavioral questions.
+- Record answers with browser speech recognition when supported.
+- Submit answers for Gemini evaluation or the local evaluator.
+- Store interview feedback against a resume analysis when an analysis ID is supplied.
+
+### 🤖 Career assistant
+
+- Provide authenticated chatbot conversations.
+- Include profile context and top opportunity matches in Gemini prompts.
+- Use a lightweight local response engine for common resume, interview, learning, and job questions when the external model is unavailable.
+
+### 🎨 Frontend experience
+
+- Static dashboard interface served from `templates/index.html`.
+- Dashboard, AI resume builder, mock interview, opportunity hub, saved matches, and analysis history views.
+- PDF.js resume preview rendered onto canvases rather than an iframe.
+- English/Hindi language controls using Google Translate integration.
+- Tailwind CDN utilities, Font Awesome icons, and project CSS in `templates/static/css/style.css`.
+- Browser JavaScript behavior in `templates/static/js/app.js`.
+
+## 🏗️ Architecture
+
+```text
+Browser
+  |
+  | static HTML/CSS/JavaScript
+  v
+Django REST API (/api/)
+  |
+  +-- Authentication and session cookies
+  +-- Resume analysis orchestration
+  +-- Local NLP fallback
+  +-- Gemini/LangChain integrations
+  +-- Opportunity and recommendation queries
+  +-- Cover letters, interview evaluation, and chatbot
+  |
+  +-- SQLite database (development default)
+  +-- Celery worker -> Redis -> scrapers and matching tasks
+```
+
+### ⚙️ Backend modules
+
+- `career_app/urls.py`: API routes and DRF router registration.
+- `career_app/views.py`: API request handling and authentication boundaries.
+- `career_app/models.py`: Profiles, academics, opportunities, matches, roles, courses, questions, and resume analyses.
+- `career_app/serializers.py`: API response serializers.
+- `career_app/ml_pipeline.py`: Gemini and resume-analysis orchestration.
+- `career_app/local_nlp.py`: Offline resume, cover-letter, interview, and assistant fallbacks.
+- `career_app/tasks.py`: Celery scraping, matching, and refresh tasks.
+- `career_app/adapters/`: External opportunity source adapters.
+- `career_app/management/commands/seed_db.py`: Seed roles and learning data.
+- `core_project/settings.py`: Django, CORS, database, REST, Celery, media, and logging configuration.
+- `core_project/celery.py`: Celery application and scheduled refresh configuration.
+
+### 🖥️ Active frontend modules
+
+- `templates/index.html`: Main application shell and UI views.
+- `templates/static/js/app.js`: API calls, state, dashboard rendering, PDF preview, speech recognition, and interactions.
+- `templates/static/css/style.css`: Shared frontend styles, scrollbar styling, animation classes, and Google Translate overrides.
+
+## 🗃️ Data Model
+
+- `StudentProfile`: authenticated or anonymous profile, target role, skills, gaps, projects, experience, improvements, questions, and readiness scores.
+- `AcademicRecord`: degree, institution, graduation year, and CGPA linked to a student profile.
+- `Opportunity`: normalized external or seeded opportunity with provider, type, mode, location, deadline, eligibility, and URL.
+- `OpportunitySkill`: skills required by an opportunity.
+- `ProfileMatch`: ranked relationship between a profile and an opportunity, including matching skills, reasoning, bookmark state, and cover letter.
+- `CareerRole` and `RoleSkill`: seeded role taxonomy used by the local analysis path.
+- `CourseRecommendation`: course suggestions associated with a skill.
+- `InterviewQuestion`: seeded questions associated with a career role.
+- `ResumeAnalysis`: historical analysis result and optional uploaded resume file for an authenticated user.
 
 ## 📂 Project Structure
 
 ```text
 AI-Career_Portal/
 ├── career_app/
-│   ├── adapters/               # Opportunity and web-scraping adapters
-│   ├── management/commands/    # Database seeding command
-│   ├── migrations/             # Django database migrations
-│   ├── authentication.py       # CSRF-exempt session authentication
-│   ├── local_nlp.py            # Offline resume parsing fallback
-│   ├── ml_pipeline.py          # Gemini and resume-analysis orchestration
-│   ├── models.py               # Profiles, opportunities, matches, and analyses
-│   ├── serializers.py          # REST API serializers
-│   ├── tasks.py                # Celery scraping, matching, and refresh tasks
-│   ├── tests.py                # Django API tests
-│   ├── urls.py                 # `/api/` routes
-│   └── views.py                # REST API views
+│   ├── adapters/
+│   ├── management/commands/seed_db.py
+│   ├── migrations/
+│   ├── authentication.py
+│   ├── local_nlp.py
+│   ├── ml_pipeline.py
+│   ├── models.py
+│   ├── serializers.py
+│   ├── tasks.py
+│   ├── tests.py
+│   ├── urls.py
+│   └── views.py
 ├── core_project/
-│   ├── settings.py             # Django, CORS, database, Celery, and logging settings
-│   ├── urls.py                 # `/admin/`, `/api/`, and development media routes
-│   └── celery.py               # Celery application and nightly schedule
+│   ├── asgi.py
+│   ├── celery.py
+│   ├── settings.py
+│   ├── urls.py
+│   └── wsgi.py
 ├── templates/
-│   ├── index.html              # Active frontend application
-│   └── static/                 # Frontend CSS and JavaScript
-├── media/resumes/              # Uploaded resume files
+│   ├── index.html
+│   └── static/
+│       ├── css/style.css
+│       └── js/app.js
+├── media/resumes/
+├── db.sqlite3
 ├── manage.py
-├── pyproject.toml              # Project metadata and dependencies
-├── requirements.txt            # pip-compatible dependency list
-├── .gitignore                  # Git ignore file
-├── .env                        # Environment variables
-├── README.md                   # Readme file
-└── uv.lock                     # Locked uv dependency resolution
+├── pyproject.toml
+├── requirements.txt
+├── uv.lock
+├── .env.example
+└── README.md
 ```
 
-The nested `career-readiness-platform/` directory contains archived/reference material and a separate Vite prototype. It is not the frontend launched by the root Django project.
+## 📋 Requirements
 
-## ⚙️ Setup
+- Python 3.11 or newer.
+- `uv` recommended, or Python `pip` with a virtual environment.
+- Redis for Celery workers and asynchronous opportunity refreshes.
+- Optional Gemini API key for cloud AI responses.
+- Optional Adzuna and YouTube API credentials for those opportunity sources.
+- Optional spaCy `en_core_web_sm` model for the local NLP path.
 
-### Requirements
-
-- Python 3.11 or newer
-- `uv` recommended, or `pip`
-- Redis required for Celery workers and asynchronous tasks
-- Optional: spaCy's `en_core_web_sm` model for the local NLP fallback
-
-### Install
+## 🛠️ Installation
 
 ```bash
 git clone https://github.com/Harsh-GitHup/AI-Career_Portal.git
@@ -90,15 +176,17 @@ cd AI-Career_Portal
 uv sync
 ```
 
-With pip, create and activate a virtual environment, then run:
+With pip:
 
 ```bash
+python -m venv .venv
+.venv\\Scripts\\activate
 python -m pip install -r requirements.txt
 ```
 
-### Environment Variables
+## 🔐 Configuration
 
-Create a `.env` file in the repository root. `GOOGLE_API_KEY` is optional; without it, resume analysis uses the local fallback.
+Copy `.env.example` to `.env` and replace the placeholder values. Do not commit `.env` or expose its secrets.
 
 ```env
 DJANGO_SECRET_KEY=replace-this-in-development
@@ -107,125 +195,205 @@ ALLOWED_HOSTS=127.0.0.1,localhost
 
 GOOGLE_API_KEY=your-gemini-api-key
 GEMINI_MODEL=gemini-3.8-flash
+
+REDIS_URL=redis://127.0.0.1:6379/0
+CELERY_BROKER_URL=redis://127.0.0.1:6379/0
+CELERY_RESULT_BACKEND=redis://127.0.0.1:6379/0
+
 ADZUNA_APP_ID=your-adzuna-app-id
 ADZUNA_APP_KEY=your-adzuna-app-key
 YOUTUBE_API_KEY=your-youtube-api-key
-
-CELERY_BROKER_URL=redis://127.0.0.1:6379/0
-CELERY_RESULT_BACKEND=redis://127.0.0.1:6379/0
 ```
 
-The Adzuna and YouTube variables enable their respective live sources. The default database is `db.sqlite3`; no separate database service is needed for local development.
+Configuration notes:
 
-### Initialize the Database
+- `GOOGLE_API_KEY` is optional. Without it, resume analysis and supported assistant features use local fallbacks.
+- `CELERY_BROKER_URL` and `CELERY_RESULT_BACKEND` default to Redis on `127.0.0.1:6379/0`.
+- SQLite is the default development database at `db.sqlite3`.
+- CORS allows the local frontend at `http://localhost:3000` and `http://127.0.0.1:3000`.
+- The project timezone is `Asia/Kolkata`.
+- Set `DEBUG=False`, configure a real secret, restrict `ALLOWED_HOSTS`, and use HTTPS before production deployment.
+
+## 🗄️ Database Initialization
 
 ```bash
 uv run manage.py migrate
 uv run manage.py seed_db
 ```
 
-The seed command creates baseline career roles, skills, course recommendations, and interview questions used by the local parser and recommendation features.
+To seed from another compatible JSON file:
 
-## Run Locally
+```bash
+uv run manage.py seed_db --file path/to/core_career_data.json
+```
 
-Start Redis first, then use separate terminals for the Django server, Celery worker, and frontend server.
+The default seed file is `career-readiness-platform/Additional Scripts/core_career_data.json`. The archived directory is used as a data source by this command only; it is not the active frontend or backend.
 
-### Django API and static media
+## ▶️ Running Locally
+
+### 🔌 Django API
 
 ```bash
 uv run manage.py runserver
 ```
 
-The API is available at `http://127.0.0.1:8000/api/`. The Django admin is at `http://127.0.0.1:8000/admin/`.
+- API: `http://127.0.0.1:8000/api/`
+- Admin: `http://127.0.0.1:8000/admin/`
+- Development media: `http://127.0.0.1:8000/media/`
 
-### Celery worker
+### 🌍 Static frontend
 
-On Windows, use the solo pool:
-
-```bash
-uv run celery -A core_project worker --loglevel=info -P solo
-```
-
-Celery Beat schedules `nightly_refresh_all_profiles` for 02:00 Asia/Kolkata time. Run Beat separately when the scheduled refresh is required:
-
-```bash
-uv run celery -A core_project beat --loglevel=info
-```
-
-If Redis is unavailable, the API can still serve synchronous requests, but background scraping and matching will be skipped or retried.
-
-### Static frontend
-
-From the repository root:
+In a separate terminal:
 
 ```bash
 uv run python -m http.server 3000 -d templates
 ```
 
-Open `http://127.0.0.1:3000`. The frontend is configured for the API at `http://127.0.0.1:8000` and the Django settings allow CORS from ports 3000 on localhost and 127.0.0.1.
+Open `http://127.0.0.1:3000` in a browser. The frontend calls the API at `http://127.0.0.1:8000` and sends credentials for session authentication.
 
-## API Overview
+### ⚡ Celery worker
 
-All API routes are prefixed with `/api/`.
+Start Redis first. On Windows, use the solo pool:
 
-- `POST /api/register/`, `POST /api/login/`, `POST /api/logout/`, `POST /api/social-login/`
-- `GET|POST|PATCH|DELETE /api/profiles/`
-- `GET|POST|PATCH|DELETE /api/academics/`
-- `POST /api/upload-resume/`
-- `GET /api/resume-history/`
-- `GET /api/opportunities/` and `GET /api/opportunities/types/`
-- `GET /api/recommendations/` and `POST /api/bookmark/<opportunity-match-id>/`
-- `POST /api/cover-letter/<opportunity-id>/`
-- `POST /api/interview-evaluate/`
-- `POST /api/chatbot/`
+```bash
+uv run celery -A core_project worker --loglevel=info -P solo
+```
 
-The profile and academic endpoints, resume history, recommendations, cover letters, interview evaluation, and chatbot require authentication unless the view explicitly permits anonymous access.
+For scheduled refreshes, run Celery Beat separately:
 
-## Verification and Formatting
+```bash
+uv run celery -A core_project beat --loglevel=info
+```
 
-Run the Django test suite:
+The API can still serve synchronous requests when Redis is unavailable, but background scraping and matching will be skipped or retried.
+
+## 🔗 API Reference
+
+All routes are prefixed with `/api/`.
+
+### 🔑 Authentication
+
+| Method | Route                | Purpose                                            |
+| ------ | -------------------- | -------------------------------------------------- |
+| `POST` | `/api/register/`     | Create an account and initial student profile      |
+| `POST` | `/api/login/`        | Start a session with username and password         |
+| `POST` | `/api/logout/`       | End the current session                            |
+| `POST` | `/api/social-login/` | Verify a Google OAuth ID token and start a session |
+
+### 📑 Profile and resume
+
+| Method                  | Route                  | Purpose                                                  |
+| ----------------------- | ---------------------- | -------------------------------------------------------- |
+| `GET/POST/PATCH/DELETE` | `/api/profiles/`       | Manage the authenticated user's profile                  |
+| `GET/POST/PATCH/DELETE` | `/api/academics/`      | Manage academic records scoped to the authenticated user |
+| `POST`                  | `/api/upload-resume/`  | Analyze a PDF and update profile data                    |
+| `GET`                   | `/api/resume-history/` | List historical resume analyses                          |
+
+### 🎯 Opportunities and recommendations
+
+| Method | Route                                 | Purpose                                                 |
+| ------ | ------------------------------------- | ------------------------------------------------------- |
+| `GET`  | `/api/opportunities/`                 | List active opportunities                               |
+| `GET`  | `/api/opportunities/types/`           | List distinct opportunity types                         |
+| `GET`  | `/api/recommendations/`               | Get ranked matches grouped as opportunities and schemes |
+| `POST` | `/api/bookmark/<match_id>/`           | Toggle a profile match bookmark                         |
+| `POST` | `/api/cover-letter/<opportunity_id>/` | Generate or return a saved cover letter                 |
+| `GET`  | `/api/cover-letter-history/`          | List saved cover letters for the authenticated user     |
+
+Opportunity list query parameters include:
+
+- `search`: search title, provider, description, and required skills.
+- `type`: filter by opportunity type, case-insensitively.
+- `is_free`: filter with `true` or `false`.
+- `search` and DRF ordering parameters can be used with the configured list filters.
+
+### 💬 Interview and assistant
+
+| Method | Route                      | Purpose                                                         |
+| ------ | -------------------------- | --------------------------------------------------------------- |
+| `POST` | `/api/interview-evaluate/` | Evaluate a question and answer using Gemini or a local fallback |
+| `POST` | `/api/chatbot/`            | Ask the authenticated contextual career assistant               |
+
+Authenticated endpoints require the session created by login, registration, or social login. The frontend uses `credentials: 'include'` for cross-origin local development.
+
+## 📤 Resume Upload Response
+
+A successful resume upload returns the updated profile summary, including:
+
+- `profile_id`
+- `full_name`
+- `target_role`
+- `readiness_score`
+- `extracted_skills`
+- `skill_gaps`
+- `recommended_courses`
+- `resume_improvements`
+- `interview_questions`
+- `bio`
+- `projects`
+- `experience`
+- `academic_records`
+
+The upload flow also replaces the profile's current academic records, stores an authenticated history entry, and attempts to queue asynchronous scraping and matching.
+
+## 🧪 Testing and Quality Checks
+
+Run the Django configuration check:
+
+```bash
+uv run python manage.py check
+```
+
+Run the test suite:
 
 ```bash
 uv run manage.py test
 ```
 
-Run Python syntax, formatting, and lint checks:
+Run Python syntax validation:
 
 ```bash
 uv run python -m compileall -q career_app core_project manage.py
+```
+
+Run formatting and lint checks:
+
+```bash
 uvx ruff format --check career_app core_project manage.py
 uvx ruff check career_app core_project manage.py
 ```
 
-Apply Ruff formatting with:
+Apply Ruff formatting only when intentionally updating formatting:
 
 ```bash
 uvx ruff format career_app core_project manage.py
 ```
 
-## AI Skill
+The existing tests cover authentication, opportunity listing and filters, recommendation grouping, profile authorization, bookmarks, history ownership, chatbot fallback behavior, cover-letter fallback behavior, interview evaluation fallback behavior, social-login errors, and mocked resume uploads.
 
-> Read AGENTS.md and .claude/skills/source-audit/SKILL.md.
-Then audit the active project according to those instructions.
-Do not modify archived code.
+## 🛡️ Security and Operational Notes
 
-These are example commands for invoking the custom dependency security skill:
+- Never commit `.env`, API keys, uploaded resumes, local databases, or generated caches.
+- Keep authenticated querysets scoped to the current user.
+- Use HTTPS and secure cookies in production.
+- Replace the development `SECRET_KEY` and wildcard hosts before deployment.
+- Configure a real database and persistent media storage for production.
+- Redis is required for reliable background scraping and scheduled refreshes.
+- External provider calls should be treated as optional because quota, network, and provider model availability can change.
+- Uploaded documents should be valid, readable PDFs and should be validated before production use at the deployment boundary.
 
-- `/dependency-cve-audit audit all active dependencies`
-  Scans project dependencies for CVEs, outdated packages, conflicts, and lockfile drift.
+## 📦 Archived Material
 
-- `/dependency-cve-audit check CVE-XXXX-YYYY`
-  Investigates a specific CVE and checks whether your project is affected.
-
-- `/dependency-cve-audit upgrade the vulnerable package safely`
-  Finds a compatible fixed version, updates the manifest/lockfile, then runs validation and rescans.
+The `career-readiness-platform/` directory contains a separate Vite prototype, archived backend copies, scripts, documentation, and seed data. It is retained for reference and is outside the active root application unless a task explicitly names it.
 
 ## 🤝 Contributing
 
-1. Create a focused feature branch.
-2. Run the relevant tests and formatting checks.
-3. Open a pull request with a clear description of the change.
+1. Make a focused change in the active root application.
+2. Preserve unrelated worktree changes and archived material.
+3. Run the narrowest relevant test first.
+4. Run Django checks and formatting/lint checks before opening a pull request.
+5. Document API, model, configuration, or setup changes.
 
 ## 📜 License
 
-[LICENSE](LICENSE)
+See [LICENSE](LICENSE).
