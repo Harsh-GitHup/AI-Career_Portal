@@ -707,141 +707,38 @@ async function fetchResumeHistory() {
             return;
         }
 
+        window.resumeAnalysisHistory = data;
+
+        // Ensure container is a grid
+        container.className = "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6";
+
         data.forEach((item, historyIdx) => {
             const date = new Date(item.created_at).toLocaleString();
             const scoreColor = item.readiness_score >= 70 ? 'text-emerald-500' : item.readiness_score >= 40 ? 'text-amber-500' : 'text-rose-500';
 
-            // Generate skills badges (All, not sliced)
-            const currentSkillsHtml = (item.current_skills || []).map(s => `<span class="px-2 py-1 bg-indigo-50 text-indigo-600 text-xs rounded-md mr-2 mb-2 inline-block">${escapeHtml(s)}</span>`).join('');
-            const gapSkillsHtml = (item.skill_gaps || []).map(s => `<span class="px-2 py-1 bg-rose-50 text-rose-600 text-xs rounded-md mr-2 mb-2 inline-block">${escapeHtml(s)}</span>`).join('');
-
-            // Skill Gap Analysis Table
-            let skillGapTableRows = '';
-            (item.skill_gaps || []).forEach(gap => {
-                skillGapTableRows += `
-                    <tr>
-                        <td class="py-4 px-6 font-medium text-gray-900">${escapeHtml(gap)}</td>
-                        <td class="py-4 px-6"><span class="px-2.5 py-1 text-xs rounded-full bg-rose-100 text-rose-700">Missing</span></td>
-                        <td class="py-4 px-6">
-                            <button onclick="searchOpportunity('${encodeInlineValue(gap)}')" class="text-indigo-600 hover:text-indigo-800 font-semibold underline text-sm transition-colors">
-                                Find ${escapeHtml(gap)} Courses &rarr;
-                            </button>
-                        </td>
-                    </tr>`;
-            });
-            const skillGapSection = skillGapTableRows ? `
-                <div class="mt-8 pt-6 border-t border-gray-100">
-                    <h5 class="text-lg font-bold text-slate-900 mb-4 flex items-center"><div class="bg-blue-50 text-blue-600 p-1.5 rounded-lg mr-3 text-sm"><i class="fa-solid fa-chart-line"></i></div> Skill Gap Analysis</h5>
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-left text-sm text-gray-600">
-                            <thead class="bg-gray-50 text-gray-700 uppercase text-[10px] tracking-wider font-bold">
-                                <tr>
-                                    <th class="py-3 px-6 rounded-tl-lg">Skill Requirement</th>
-                                    <th class="py-3 px-6">Level</th>
-                                    <th class="py-3 px-6 rounded-tr-lg">Recommendation</th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-gray-50">
-                                ${skillGapTableRows}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            ` : '';
-
-            // Resume Improvements List
-            let improvementsHtml = '';
-            (item.resume_improvements || []).forEach(tip => {
-                improvementsHtml += `<li class="p-4 bg-indigo-50 border-l-4 border-indigo-500 text-sm text-indigo-900 rounded-r-lg font-medium shadow-sm mb-2">${escapeHtml(tip)}</li>`;
-            });
-            const improvementsSection = improvementsHtml ? `
-                <div class="mt-8 pt-6 border-t border-gray-100">
-                    <h5 class="text-lg font-bold text-slate-900 mb-4">Resume Presentation Optimizations</h5>
-                    <ul class="space-y-3">
-                        ${improvementsHtml}
-                    </ul>
-                </div>
-            ` : '';
-
-            // Mock Interview Questions
-            let interviewHtml = '';
-            (item.interview_questions || []).forEach((q, idx) => {
-                const encodedQ = encodeInlineValue(q);
-                const uId = `hist-${historyIdx}-${idx}`; // Unique ID across all history elements
-
-                let savedFeedbackHtml = '';
-                if (item.interview_feedbacks && item.interview_feedbacks[q]) {
-                    const savedData = item.interview_feedbacks[q];
-                    let formattedFeedback = escapeHtml(savedData.feedback).replaceAll(/\n/g, '<br/>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-                    savedFeedbackHtml = `
-                        <div class="mt-4 p-4 rounded-xl text-sm font-medium leading-relaxed bg-emerald-50 text-emerald-800 border border-emerald-100">
-                            <div class="mb-3 p-3 bg-white/50 rounded-lg italic text-gray-700"><strong>Your Answer:</strong> ${escapeHtml(savedData.answer)}</div>
-                            <i class="fa-solid fa-square-poll-vertical text-emerald-600 text-lg mb-2"></i><br/>${formattedFeedback}
-                        </div>
-                    `;
-                }
-
-                interviewHtml += `
-                    <div class="p-5 bg-white border border-gray-100 shadow-sm rounded-xl hover:shadow-md transition-shadow mb-4">
-                        <span class="text-xs font-bold text-indigo-500 uppercase tracking-wider mb-2 block">Question ${idx + 1}</span>
-                        <p class="text-sm font-semibold text-gray-800 mb-4">${escapeHtml(q)}</p>
-                        ${savedFeedbackHtml ? savedFeedbackHtml : `
-                        <div class="flex flex-col space-y-3">
-                            <button id="btn-record-${uId}" onclick="toggleRecording('${uId}')" class="w-fit bg-slate-50 hover:bg-rose-50 text-slate-600 hover:text-rose-600 border border-slate-200 hover:border-rose-200 px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center shadow-sm">
-                                <i id="icon-record-${uId}" class="fa-solid fa-microphone mr-2"></i> 
-                                <span id="text-record-${uId}">Record Answer</span>
-                            </button>
-                            <div id="transcript-container-${uId}" class="hidden bg-indigo-50/50 p-4 rounded-xl border border-indigo-100 relative">
-                                <p id="transcript-${uId}" class="text-sm text-slate-700 italic mb-3"></p>
-                                <button onclick="submitInterviewAnswer('${uId}', '${encodedQ}', ${item.id})" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-2 rounded-lg shadow-md transition-colors w-fit flex items-center">
-                                    <i class="fa-solid fa-robot mr-2"></i> Evaluate
-                                </button>
-                            </div>
-                            <div id="feedback-container-${uId}" class="hidden p-4 rounded-xl text-sm font-medium leading-relaxed"></div>
-                        </div>`}
-                    </div>`;
-            });
-            const interviewSection = interviewHtml ? `
-                <div class="mt-8 pt-6 border-t border-gray-100">
-                    <h5 class="text-lg font-bold text-slate-900 mb-4">Tailored Mock Interview Questions</h5>
-                    <div>${interviewHtml}</div>
-                </div>
-            ` : '';
+            // Generate a few skills badges for preview
+            const previewSkillsHtml = (item.current_skills || []).slice(0, 3).map(s => `<span class="px-2 py-1 bg-indigo-50 text-indigo-600 text-xs rounded-md inline-block">${escapeHtml(s)}</span>`).join('');
 
             container.innerHTML += `
-                <div class="bg-white p-6 md:p-10 rounded-3xl border border-gray-100 shadow-sm hover:shadow-lg transition-all duration-300 relative overflow-hidden mb-8">
-                    <div class="flex flex-col md:flex-row justify-between items-start mb-6 border-b border-gray-50 pb-6">
-                        <div>
-                            <h4 class="text-2xl font-extrabold text-slate-900">${escapeHtml(item.target_role || 'Target Role Not Set')}</h4>
-                            <p class="text-sm text-slate-500 mt-2"><i class="fa-regular fa-calendar mr-2"></i> Analyzed on: ${date}</p>
-                        </div>
-                        <div class="flex flex-col items-end mt-4 md:mt-0">
-                            <span class="text-4xl font-black ${scoreColor}">${item.readiness_score}%</span>
-                            <span class="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Score</span>
+                <div class="bg-white p-6 rounded-2xl border border-indigo-100 shadow-sm hover:shadow-md transition-all flex flex-col h-full">
+                    <div class="flex justify-between items-start mb-4">
+                        <span class="text-xs font-bold text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full"><i class="fa-solid fa-bullseye mr-1"></i> ${escapeHtml(item.target_role || 'General')}</span>
+                        <span class="text-xs font-medium text-slate-400">${new Date(item.created_at).toLocaleDateString()}</span>
+                    </div>
+                    <div class="flex items-center justify-between mb-4">
+                        <span class="text-3xl font-black ${scoreColor}">${item.readiness_score}%</span>
+                        <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Score</span>
+                    </div>
+                    <div class="mb-4 flex-grow">
+                        <p class="text-xs text-slate-500 mb-2 font-medium">Top Skills Detected:</p>
+                        <div class="flex flex-wrap items-center gap-2">
+                            ${previewSkillsHtml || '<span class="text-xs text-slate-400">None detected</span>'}
+                            ${(item.current_skills || []).length > 3 ? `<span class="text-xs font-bold text-indigo-400 ml-1">+${item.current_skills.length - 3} more</span>` : ''}
                         </div>
                     </div>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-                        <div>
-                            <h5 class="text-sm font-bold text-slate-700 mb-3"><i class="fa-solid fa-check text-emerald-500 mr-2"></i> Current Skills</h5>
-                            <div class="flex flex-wrap">${currentSkillsHtml || '<span class="text-sm text-slate-400">None detected</span>'}</div>
-                        </div>
-                        <div>
-                            <h5 class="text-sm font-bold text-slate-700 mb-3"><i class="fa-solid fa-xmark text-rose-500 mr-2"></i> Skill Gaps</h5>
-                            <div class="flex flex-wrap">${gapSkillsHtml || '<span class="text-sm text-slate-400">None detected</span>'}</div>
-                        </div>
-                    </div>
-                    
-                    ${improvementsSection}
-                    ${skillGapSection}
-                    ${interviewSection}
-
-                    ${item.resume_file ? `
-                    <div class="mt-8 pt-6 border-t border-gray-50 flex justify-between items-center">
-                        <span class="text-sm font-bold text-slate-500 uppercase tracking-widest"><i class="fa-solid fa-paperclip mr-2"></i> Original Document</span>
-                        <a href="${safeExternalUrl(item.resume_file)}" target="_blank" rel="noopener noreferrer" class="text-sm font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-4 py-2 rounded-lg transition-colors flex items-center shadow-sm">
-                            View PDF <i class="fa-solid fa-arrow-up-right-from-square ml-2"></i>
-                        </a>
-                    </div>` : ''}
+                    <button onclick="openAnalysisModal(${historyIdx})" class="w-full bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-sm font-bold py-3 rounded-xl transition-colors mt-auto flex items-center justify-center">
+                        View Full Analysis <i class="fa-solid fa-arrow-right ml-2"></i>
+                    </button>
                 </div>
             `;
         });
@@ -849,8 +746,157 @@ async function fetchResumeHistory() {
         await fetchCoverLetterHistory();
     } catch (e) {
         console.error('fetchResumeHistory error:', e);
-        document.getElementById('historyContainer').innerHTML = `<p class="text-sm text-red-500 bg-white p-6 rounded-2xl border border-red-100 text-center">Error loading history.</p>`;
+        const container = document.getElementById('historyContainer');
+        container.className = "space-y-4";
+        container.innerHTML = `<p class="text-sm text-red-500 bg-white p-6 rounded-2xl border border-red-100 text-center">Error loading history.</p>`;
     }
+}
+
+function openAnalysisModal(historyIdx) {
+    if (!window.resumeAnalysisHistory || !window.resumeAnalysisHistory[historyIdx]) return;
+
+    const item = window.resumeAnalysisHistory[historyIdx];
+    const date = new Date(item.created_at).toLocaleString();
+    const scoreColor = item.readiness_score >= 70 ? 'text-emerald-500' : item.readiness_score >= 40 ? 'text-amber-500' : 'text-rose-500';
+
+    // Generate skills badges (All, not sliced)
+    const currentSkillsHtml = (item.current_skills || []).map(s => `<span class="px-2 py-1 bg-indigo-50 text-indigo-600 text-xs rounded-md mr-2 mb-2 inline-block">${escapeHtml(s)}</span>`).join('');
+    const gapSkillsHtml = (item.skill_gaps || []).map(s => `<span class="px-2 py-1 bg-rose-50 text-rose-600 text-xs rounded-md mr-2 mb-2 inline-block">${escapeHtml(s)}</span>`).join('');
+
+    // Skill Gap Analysis Table
+    let skillGapTableRows = '';
+    (item.skill_gaps || []).forEach(gap => {
+        skillGapTableRows += `
+            <tr>
+                <td class="py-4 px-6 font-medium text-gray-900">${escapeHtml(gap)}</td>
+                <td class="py-4 px-6"><span class="px-2.5 py-1 text-xs rounded-full bg-rose-100 text-rose-700">Missing</span></td>
+                <td class="py-4 px-6">
+                    <button onclick="searchOpportunity('${encodeInlineValue(gap)}'); closeAnalysisModal();" class="text-indigo-600 hover:text-indigo-800 font-semibold underline text-sm transition-colors">
+                        Find ${escapeHtml(gap)} Courses &rarr;
+                    </button>
+                </td>
+            </tr>`;
+    });
+    const skillGapSection = skillGapTableRows ? `
+        <div class="mt-8 pt-6 border-t border-gray-100">
+            <h5 class="text-lg font-bold text-slate-900 mb-4 flex items-center"><div class="bg-blue-50 text-blue-600 p-1.5 rounded-lg mr-3 text-sm"><i class="fa-solid fa-chart-line"></i></div> Skill Gap Analysis</h5>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-sm text-gray-600">
+                    <thead class="bg-gray-50 text-gray-700 uppercase text-[10px] tracking-wider font-bold">
+                        <tr>
+                            <th class="py-3 px-6 rounded-tl-lg">Skill Requirement</th>
+                            <th class="py-3 px-6">Level</th>
+                            <th class="py-3 px-6 rounded-tr-lg">Recommendation</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-50">
+                        ${skillGapTableRows}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    ` : '';
+
+    // Resume Improvements List
+    let improvementsHtml = '';
+    (item.resume_improvements || []).forEach(tip => {
+        improvementsHtml += `<li class="p-4 bg-indigo-50 border-l-4 border-indigo-500 text-sm text-indigo-900 rounded-r-lg font-medium shadow-sm mb-2">${escapeHtml(tip)}</li>`;
+    });
+    const improvementsSection = improvementsHtml ? `
+        <div class="mt-8 pt-6 border-t border-gray-100">
+            <h5 class="text-lg font-bold text-slate-900 mb-4">Resume Presentation Optimizations</h5>
+            <ul class="space-y-3">
+                ${improvementsHtml}
+            </ul>
+        </div>
+    ` : '';
+
+    // Mock Interview Questions
+    let interviewHtml = '';
+    (item.interview_questions || []).forEach((q, idx) => {
+        const encodedQ = encodeInlineValue(q);
+        const uId = `hist-${historyIdx}-${idx}`; // Unique ID across all history elements
+
+        let savedFeedbackHtml = '';
+        if (item.interview_feedbacks && item.interview_feedbacks[q]) {
+            const savedData = item.interview_feedbacks[q];
+            let formattedFeedback = escapeHtml(savedData.feedback).replaceAll(/\n/g, '<br/>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+            savedFeedbackHtml = `
+                <div class="mt-4 p-4 rounded-xl text-sm font-medium leading-relaxed bg-emerald-50 text-emerald-800 border border-emerald-100">
+                    <div class="mb-3 p-3 bg-white/50 rounded-lg italic text-gray-700"><strong>Your Answer:</strong> ${escapeHtml(savedData.answer)}</div>
+                    <i class="fa-solid fa-square-poll-vertical text-emerald-600 text-lg mb-2"></i><br/>${formattedFeedback}
+                </div>
+            `;
+        }
+
+        interviewHtml += `
+            <div class="p-5 bg-white border border-gray-100 shadow-sm rounded-xl hover:shadow-md transition-shadow mb-4">
+                <span class="text-xs font-bold text-indigo-500 uppercase tracking-wider mb-2 block">Question ${idx + 1}</span>
+                <p class="text-sm font-semibold text-gray-800 mb-4">${escapeHtml(q)}</p>
+                ${savedFeedbackHtml ? savedFeedbackHtml : `
+                <div class="flex flex-col space-y-3">
+                    <button id="btn-record-${uId}" onclick="toggleRecording('${uId}')" class="w-fit bg-slate-50 hover:bg-rose-50 text-slate-600 hover:text-rose-600 border border-slate-200 hover:border-rose-200 px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center shadow-sm">
+                        <i id="icon-record-${uId}" class="fa-solid fa-microphone mr-2"></i> 
+                        <span id="text-record-${uId}">Record Answer</span>
+                    </button>
+                    <div id="transcript-container-${uId}" class="hidden bg-indigo-50/50 p-4 rounded-xl border border-indigo-100 relative">
+                        <p id="transcript-${uId}" class="text-sm text-slate-700 italic mb-3"></p>
+                        <button onclick="submitInterviewAnswer('${uId}', '${encodedQ}', ${item.id})" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-2 rounded-lg shadow-md transition-colors w-fit flex items-center">
+                            <i class="fa-solid fa-robot mr-2"></i> Evaluate
+                        </button>
+                    </div>
+                    <div id="feedback-container-${uId}" class="hidden p-4 rounded-xl text-sm font-medium leading-relaxed"></div>
+                </div>`}
+            </div>`;
+    });
+    const interviewSection = interviewHtml ? `
+        <div class="mt-8 pt-6 border-t border-gray-100">
+            <h5 class="text-lg font-bold text-slate-900 mb-4">Tailored Mock Interview Questions</h5>
+            <div>${interviewHtml}</div>
+        </div>
+    ` : '';
+
+    const contentHtml = `
+        <div class="flex flex-col md:flex-row justify-between items-start mb-6 border-b border-gray-50 pb-6">
+            <div>
+                <h4 class="text-2xl font-extrabold text-slate-900">${escapeHtml(item.target_role || 'Target Role Not Set')}</h4>
+                <p class="text-sm text-slate-500 mt-2"><i class="fa-regular fa-calendar mr-2"></i> Analyzed on: ${date}</p>
+            </div>
+            <div class="flex flex-col items-end mt-4 md:mt-0">
+                <span class="text-4xl font-black ${scoreColor}">${item.readiness_score}%</span>
+                <span class="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Score</span>
+            </div>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div>
+                <h5 class="text-sm font-bold text-slate-700 mb-3"><i class="fa-solid fa-check text-emerald-500 mr-2"></i> Current Skills</h5>
+                <div class="flex flex-wrap">${currentSkillsHtml || '<span class="text-sm text-slate-400">None detected</span>'}</div>
+            </div>
+            <div>
+                <h5 class="text-sm font-bold text-slate-700 mb-3"><i class="fa-solid fa-xmark text-rose-500 mr-2"></i> Skill Gaps</h5>
+                <div class="flex flex-wrap">${gapSkillsHtml || '<span class="text-sm text-slate-400">None detected</span>'}</div>
+            </div>
+        </div>
+        
+        ${improvementsSection}
+        ${skillGapSection}
+        ${interviewSection}
+
+        ${item.resume_file ? `
+        <div class="mt-8 pt-6 border-t border-gray-50 flex justify-between items-center">
+            <span class="text-sm font-bold text-slate-500 uppercase tracking-widest"><i class="fa-solid fa-paperclip mr-2"></i> Original Document</span>
+            <a href="${safeExternalUrl(item.resume_file)}" target="_blank" rel="noopener noreferrer" class="text-sm font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-4 py-2 rounded-lg transition-colors flex items-center shadow-sm">
+                View PDF <i class="fa-solid fa-arrow-up-right-from-square ml-2"></i>
+            </a>
+        </div>` : ''}
+    `;
+
+    document.getElementById('analysisModalContent').innerHTML = contentHtml;
+    document.getElementById('analysisModal').classList.remove('hidden');
+}
+
+function closeAnalysisModal() {
+    document.getElementById('analysisModal').classList.add('hidden');
 }
 
 async function fetchCoverLetterHistory() {
