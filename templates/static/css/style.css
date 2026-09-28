@@ -53,3 +53,49 @@ body {
 ::-webkit-scrollbar-thumb:hover {
         background: #94a3b8;
 }
+
+/* Hide Google Translate Banner and prevent page shift */
+html {
+        top: 0 !important;
+}
+
+body {
+        top: 0 !important;
+        position: relative !important;
+}
+
+iframe.skiptranslate,
+.VIpgJd-Zvi9od-aZ2wEe-wOHMyf,
+.VIpgJd-Zvi9od-ORHb-OEVmcd,
+.goog-te-banner-frame,
+.skiptranslate > iframe.goog-te-banner-frame,
+iframe.goog-te-banner-frame {
+        display: none !important;
+        opacity: 0 !important;
+        visibility: hidden !important;
+        pointer-events: none !important;
+}
+
+.goog-tooltip {
+        display: none !important;
+}
+
+.goog-tooltip:hover {
+        display: none !important;
+}
+
+.goog-text-highlight {
+        background-color: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+}
+
+#goog-gt-tt,
+.goog-te-balloon-frame {
+        display: none !important;
+}
+
+.goog-text-highlight {
+        background: none !important;
+        box-shadow: none !important;
+}
