@@ -7,6 +7,8 @@ from langchain_community.document_loaders import PyPDFLoader
 from langchain_google_genai import ChatGoogleGenerativeAI
 from pydantic import BaseModel, Field
 
+from .local_nlp import LocalNLPResumeParser
+
 logger = logging.getLogger(__name__)
 load_dotenv()
 
@@ -48,6 +50,28 @@ class ResumeAnalysis(BaseModel):
     )
 
 
+def _analyze_resume_locally(resume_text: str) -> ResumeAnalysis:
+    parser = LocalNLPResumeParser(resume_text)
+    skills = parser.extract_skills()
+    target_roles = parser.determine_roles(skills)
+    primary_role = target_roles[0] if target_roles else "Junior Analyst"
+    skill_gaps, courses = parser.find_gaps_and_courses(primary_role, skills)
+
+    return ResumeAnalysis(
+        full_name=parser.extract_name(),
+        target_professions=target_roles[:5],
+        extracted_skills=skills,
+        skill_gaps=skill_gaps[:5],
+        recommended_courses=courses[:5],
+        resume_improvements=parser.get_improvements(skill_gaps)[:5],
+        interview_questions=parser.generate_interview_qs(primary_role),
+        summary=parser.extract_summary(),
+        projects=parser.extract_projects(),
+        experience=parser.extract_experience(),
+        academic_records=parser.extract_academic_records(),
+    )
+
+
 def analyze_resume(uploaded_file_bytes: bytes) -> ResumeAnalysis:
     """Safely extracts text from uploaded PDF bytes and prompts Gemini for structured analysis. Fallbacks to local NLP model."""
     temp_path = None
@@ -65,39 +89,42 @@ def analyze_resume(uploaded_file_bytes: bytes) -> ResumeAnalysis:
 
     api_key = os.getenv("GOOGLE_API_KEY")
 
-    if api_key:
-        try:
-            model_name = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
-            llm = ChatGoogleGenerativeAI(
-                model=model_name,
-                google_api_key=api_key,
-                temperature=0.1,
-                max_retries=3,  # Allow some retries for 503/429 before falling back
-            )
-            structured_llm = llm.with_structured_output(ResumeAnalysis)
-            prompt = f"""
-            Analyze the following resume text strictly and return clean structured data.
-            1. Detect the candidate's name or assign 'Student'.
-            2. Determine the top 5 best matching job titles/professions.
-            3. Extract all explicit skills demonstrated in the projects and experience sections.
-            4. Detect 5 to 10 critical industry skill gaps needed to succeed in their primary target role.
-            5. Suggest actual SWAYAM/NPTEL certified courses for those gaps.
-            6. Provide 5 high-impact resume enhancement recommendations.
-            7. Provide 10 realistic interview practice questions.
-            8. Extract a short professional summary.
-            9. Extract all project details.
-            10. Extract all work experience.
-            11. Extract all academic records (degree, institution, graduation_year, cgpa).
+    if not api_key:
+        logger.info(
+            "GOOGLE_API_KEY is unavailable; using local resume analysis")
+        return _analyze_resume_locally(resume_text)
 
-            Resume Content:
-            {resume_text}
-            """
-            return structured_llm.invoke(prompt)
-        except Exception as e:
-            logger.error(f"LLM API Error: {e}")
-            raise RuntimeError(f"AI Analysis Failed: {e!s}. Please check your API configuration or try again.") from e
-    else:
-        raise RuntimeError("AI Analysis Failed: GOOGLE_API_KEY is not set in the environment variables.")
+    try:
+        model_name = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
+        llm = ChatGoogleGenerativeAI(
+            model=model_name,
+            google_api_key=api_key,
+            temperature=0.1,
+            max_retries=3,
+        )
+        structured_llm = llm.with_structured_output(ResumeAnalysis)
+        prompt = f"""
+        Analyze the following resume text strictly and return clean structured data.
+        1. Detect the candidate's name or assign 'Student'.
+        2. Determine the top 5 best matching job titles/professions.
+        3. Extract all explicit skills demonstrated in the projects and experience sections.
+        4. Detect 5 to 10 critical industry skill gaps needed to succeed in their primary target role.
+        5. Suggest actual SWAYAM/NPTEL certified courses for those gaps.
+        6. Provide 5 high-impact resume enhancement recommendations.
+        7. Provide exactly 5 realistic technical and behavioral interview practice questions.
+        8. Extract a short professional summary.
+        9. Extract all project details.
+        10. Extract all work experience.
+        11. Extract all academic records (degree, institution, graduation_year, cgpa).
+
+        Resume Content:
+        {resume_text}
+        """
+        return structured_llm.invoke(prompt)
+    except Exception as e:  # noqa: BLE001
+        logger.warning(
+            "External resume analysis unavailable; using local fallback: %s", e)
+        return _analyze_resume_locally(resume_text)
 
 
 def calculate_opportunity_relevance(

@@ -14,6 +14,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from .local_nlp import evaluate_local_interview_answer, generate_local_cover_letter
 from .ml_pipeline import analyze_resume
 from .models import (
     AcademicRecord,
@@ -80,10 +81,12 @@ class UploadResumeAPIView(APIView):
                     pass
 
             if user_obj:
-                profile, _ = StudentProfile.objects.get_or_create(user=user_obj)
+                profile, _ = StudentProfile.objects.get_or_create(
+                    user=user_obj)
                 profile.full_name = analysis.full_name
             else:
-                profile = StudentProfile.objects.create(full_name=analysis.full_name)
+                profile = StudentProfile.objects.create(
+                    full_name=analysis.full_name)
 
             profile.target_role = (
                 analysis.target_professions[0]
@@ -124,21 +127,25 @@ class UploadResumeAPIView(APIView):
                 try:
                     AcademicRecord.objects.create(
                         student=profile,
-                        degree=str(record.get("degree", "Unknown Degree"))[:150],
+                        degree=str(record.get("degree", "Unknown Degree"))[
+                            :150],
                         institution=str(
                             record.get("institution", "Unknown Institution")
                         )[:200],
-                        graduation_year=int(record.get("graduation_year", 2024)),
+                        graduation_year=int(
+                            record.get("graduation_year", 2024)),
                         cgpa=float(record.get("cgpa", 0.0)),
                     )
                 except Exception as e:  # noqa: BLE001
-                    logger.warning(f"Failed to save academic record {record}: {e}")
+                    logger.warning(
+                        f"Failed to save academic record {record}: {e}")
 
             # 3. Trigger Celery Asynchronous Scraper (which chains match scoring)
             try:
                 run_universal_scraper.delay(profile.id)
             except Exception as e:  # noqa: BLE001
-                logger.warning(f"Background tasks skipped (Redis may be down): {e}")
+                logger.warning(
+                    f"Background tasks skipped (Redis may be down): {e}")
 
             return Response(
                 {
@@ -355,7 +362,25 @@ class ChatbotAPIView(APIView):
         try:
             profile = StudentProfile.objects.get(user=request.user)
             profile_id = profile.id
-            context_msg += f"\nThe user is a {profile.target_role} with skills: {', '.join(profile.current_skills)}."
+            context_msg += (
+                f"\nThe user is targeting {profile.target_role}."
+                f"\nCurrent skills: {', '.join(profile.current_skills)}."
+                f"\nSkill gaps: {', '.join(profile.skill_gaps)}."
+            )
+            matched_opportunities = (
+                ProfileMatch.objects.filter(profile=profile)
+                .select_related("opportunity")
+                .order_by("-relevance_score")[:3]
+            )
+            opportunity_context = [
+                f"{match.opportunity.title} ({match.opportunity.provider}): "
+                f"{match.opportunity.description[:240]}"
+                for match in matched_opportunities
+            ]
+            if opportunity_context:
+                context_msg += "\nTop matched opportunities:\n- " + "\n- ".join(
+                    opportunity_context
+                )
         except StudentProfile.DoesNotExist:
             pass
 
@@ -516,61 +541,46 @@ class GenerateCoverLetterAPIView(APIView):
             )
 
         api_key = os.getenv("GOOGLE_API_KEY")
-        if not api_key:
-            return Response(
-                {"error": "LLM API Key missing"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        cover_letter = None
+        if api_key:
+            try:
+                from langchain_google_genai import ChatGoogleGenerativeAI
 
-        from langchain_google_genai import ChatGoogleGenerativeAI
+                llm = ChatGoogleGenerativeAI(
+                    model="gemini-3.8-flash", google_api_key=api_key, temperature=0.7
+                )
+                prompt = f"""
+                Write a professional cover letter for the following job opportunity.
+                Candidate Name: {profile.full_name}
+                Target Role: {profile.target_role}
+                Candidate Skills: {", ".join(profile.current_skills)}
 
-        llm = ChatGoogleGenerativeAI(
-            model="gemini-3.8-flash", google_api_key=api_key, temperature=0.7
-        )
-        prompt = f"""
-        Write a professional cover letter for the following job opportunity.
-        Candidate Name: {profile.full_name}
-        Target Role: {profile.target_role}
-        Candidate Skills: {", ".join(profile.current_skills)}
-        
-        Job Title: {opportunity.title}
-        Company/Provider: {opportunity.provider}
-        Job Description: {opportunity.description}
-        
-        The cover letter should be concise, professional, and highlight the alignment between the candidate's skills and the job requirements.
-        """
-        try:
-            response = llm.invoke(prompt)
-            cover_letter = response.content
-            if isinstance(cover_letter, list):
-                cover_letter = "".join(
-                    [
+                Job Title: {opportunity.title}
+                Company/Provider: {opportunity.provider}
+                Job Description: {opportunity.description}
+
+                The cover letter should be concise, professional, and highlight the alignment between the candidate's skills and the job requirements.
+                """
+                response = llm.invoke(prompt)
+                cover_letter = response.content
+                if isinstance(cover_letter, list):
+                    cover_letter = "".join(
                         p.get("text", "") if isinstance(p, dict) else str(p)
                         for p in cover_letter
-                    ]
-                )
+                    )
+            except Exception as e:  # noqa: BLE001
+                logger.warning(
+                    "Cover letter provider unavailable; using local fallback: %s", e)
 
-            # Save the generated cover letter to the database
+        if not cover_letter:
+            cover_letter = generate_local_cover_letter(profile, opportunity)
+
+        try:
             match.cover_letter = cover_letter
             match.save(update_fields=["cover_letter"])
 
             return Response({"cover_letter": cover_letter}, status=status.HTTP_200_OK)
         except Exception as e:  # noqa: BLE001
-            error_str = str(e).lower()
-            if "503" in error_str or "unavailable" in error_str:
-                return Response(
-                    {
-                        "error": "The AI service is currently experiencing high load. Please try again in a moment."
-                    },
-                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
-                )
-            elif "429" in error_str or "quota" in error_str or "exhausted" in error_str:
-                return Response(
-                    {
-                        "error": "AI rate limit exceeded. Please wait a minute and try again."
-                    },
-                    status=status.HTTP_429_TOO_MANY_REQUESTS,
-                )
             return Response(
                 {"error": f"Failed to generate cover letter: {e!s}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -590,43 +600,37 @@ class InterviewEvaluationAPIView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        api_key = os.getenv("GOOGLE_API_KEY")
-        if not api_key:
-            return Response(
-                {"error": "LLM API Key missing. Ensure you have GOOGLE_API_KEY set."},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
-
-        from langchain_google_genai import ChatGoogleGenerativeAI
-
-        llm = ChatGoogleGenerativeAI(
-            model="gemini-3.8-flash", google_api_key=api_key, temperature=0.7
-        )
-
-        prompt = f"""
-        You are an expert technical interviewer evaluating a candidate's answer.
-        
-        Question: {question}
-        Candidate's Answer: {answer}
-        
-        Evaluate the candidate's answer. Provide concise, constructive feedback (5-6 sentences). 
-        Identify what was good, what was missing, and give a rating out of 10.
-        Format your response nicely.
-        """
-
         analysis_id = request.data.get("analysis_id")
+        feedback = None
+        api_key = os.getenv("GOOGLE_API_KEY")
+        if api_key:
+            try:
+                from langchain_google_genai import ChatGoogleGenerativeAI
 
-        try:
-            response = llm.invoke(prompt)
-            feedback = response.content
-            if isinstance(feedback, list):
-                feedback = "".join(
-                    [
+                llm = ChatGoogleGenerativeAI(
+                    model="gemini-3.8-flash", google_api_key=api_key, temperature=0.7
+                )
+                response = llm.invoke(f"""
+                You are an expert technical interviewer evaluating a candidate's answer.
+                Question: {question}
+                Candidate's Answer: {answer}
+                Evaluate the candidate's answer in 5-6 concise sentences. Identify
+                strengths, missing points, and give a rating out of 10.
+                """)
+                feedback = response.content
+                if isinstance(feedback, list):
+                    feedback = "".join(
                         p.get("text", "") if isinstance(p, dict) else str(p)
                         for p in feedback
-                    ]
-                )
+                    )
+            except Exception as e:  # noqa: BLE001
+                logger.warning(
+                    "Interview evaluation provider unavailable; using local fallback: %s", e)
 
+        if not feedback:
+            feedback = evaluate_local_interview_answer(question, answer)
+
+        try:
             if analysis_id:
                 try:
                     # Update the ResumeAnalysis record with the feedback
@@ -647,22 +651,7 @@ class InterviewEvaluationAPIView(APIView):
 
             return Response({"feedback": feedback}, status=status.HTTP_200_OK)
         except Exception as e:  # noqa: BLE001
-            error_str = str(e).lower()
-            if "503" in error_str or "unavailable" in error_str:
-                return Response(
-                    {
-                        "error": "The AI service is currently experiencing high load. Please try again in a moment."
-                    },
-                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
-                )
-            elif "429" in error_str or "quota" in error_str or "exhausted" in error_str:
-                return Response(
-                    {
-                        "error": "AI rate limit exceeded. Please wait a minute and try again."
-                    },
-                    status=status.HTTP_429_TOO_MANY_REQUESTS,
-                )
             return Response(
-                {"error": f"Failed to evaluate answer: {e!s}"},
+                {"error": f"Failed to save interview evaluation: {e!s}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
