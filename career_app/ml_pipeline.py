@@ -93,9 +93,9 @@ def analyze_resume(uploaded_file_bytes: bytes) -> ResumeAnalysis:
             {resume_text}
             """
             return structured_llm.invoke(prompt)
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             logger.error(f"LLM API Error: {e}")
-            raise RuntimeError(f"AI Analysis Failed: {str(e)}. Please check your API configuration or try again.") from e
+            raise RuntimeError(f"AI Analysis Failed: {e!s}. Please check your API configuration or try again.") from e
     else:
         raise RuntimeError("AI Analysis Failed: GOOGLE_API_KEY is not set in the environment variables.")
 

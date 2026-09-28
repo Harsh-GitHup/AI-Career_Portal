@@ -5,7 +5,13 @@ from django.test import TestCase
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from career_app.models import Opportunity, ProfileMatch, StudentProfile
+from career_app.models import (
+    AcademicRecord,
+    Opportunity,
+    ProfileMatch,
+    ResumeAnalysis,
+    StudentProfile,
+)
 
 
 class CareerAppTests(TestCase):
@@ -55,6 +61,30 @@ class CareerAppTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertGreaterEqual(len(response.data["results"]), 1)
 
+    def test_opportunities_can_filter_by_type_and_free_status(self):
+        Opportunity.objects.create(
+            dedupe_hash="opp2",
+            title="Paid Bootcamp",
+            provider="LearnCorp",
+            opportunity_type="Course",
+            is_free=False,
+            url="http://example.com/course1",
+        )
+
+        response = self.client.get(
+            "/api/opportunities/", {"type": "job", "is_free": "true"}
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data["results"]), 1)
+        self.assertEqual(response.data["results"][0]["title"], "Django Developer")
+
+    def test_opportunity_types_api(self):
+        response = self.client.get("/api/opportunities/types/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data, ["Job"])
+
     def test_recommendations_api(self):
         self.client.force_authenticate(user=self.user)
         response = self.client.get("/api/recommendations/")
@@ -77,6 +107,45 @@ class CareerAppTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertTrue(response.data["is_bookmarked"])
 
+        response = self.client.post(f"/api/bookmark/{match.id}/")
+        self.assertFalse(response.data["is_bookmarked"])
+
+    def test_resume_and_cover_letter_history_are_scoped_to_user(self):
+        ResumeAnalysis.objects.create(
+            user=self.user,
+            target_role="Software Engineer",
+            current_skills=["Python"],
+        )
+        ProfileMatch.objects.filter(profile=self.profile).update(
+            cover_letter="Dear hiring team"
+        )
+
+        self.client.force_authenticate(user=self.user)
+        resume_response = self.client.get("/api/resume-history/")
+        cover_letter_response = self.client.get("/api/cover-letter-history/")
+
+        self.assertEqual(resume_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(resume_response.data["results"]), 1)
+        self.assertEqual(cover_letter_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(cover_letter_response.data["results"]), 1)
+
+    def test_chatbot_local_fallback(self):
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.post(
+            "/api/chatbot/", {"message": "How should I improve my resume?"}, format="json"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("resume", response.data["response"].lower())
+
+    def test_chatbot_requires_message(self):
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.post("/api/chatbot/", {}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
     def test_social_login_invalid_token(self):
         response = self.client.post(
             "/api/social-login/", {"token": "invalid_token"}, format="json"
@@ -96,6 +165,17 @@ class CareerAppTests(TestCase):
             recommended_courses = []
             resume_improvements = []
             interview_questions = []
+            summary = "Data-focused software professional."
+            projects = ["Resume analyzer"]
+            experience = ["Software engineering intern"]
+            academic_records = [
+                {
+                    "degree": "B.Tech",
+                    "institution": "Example University",
+                    "graduation_year": 2024,
+                    "cgpa": 8.5,
+                }
+            ]
 
         mock_analyze.return_value = MockAnalysis()
 
@@ -113,3 +193,6 @@ class CareerAppTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["full_name"], "Jane Doe")
         self.assertEqual(response.data["target_role"], "Data Scientist")
+        self.assertEqual(response.data["bio"], "Data-focused software professional.")
+        self.assertEqual(len(response.data["academic_records"]), 1)
+        self.assertEqual(AcademicRecord.objects.count(), 1)
