@@ -146,6 +146,35 @@ class CareerAppTests(TestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
+    @patch("career_app.views.os.getenv", return_value=None)
+    def test_cover_letter_uses_local_fallback_without_api_key(self, _mock_getenv):
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.post(
+            f"/api/cover-letter/{self.opportunity.id}/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("Django Developer", response.data["cover_letter"])
+        self.assertTrue(ProfileMatch.objects.get(
+            profile=self.profile, opportunity=self.opportunity
+        ).cover_letter)
+
+    @patch("career_app.views.os.getenv", return_value=None)
+    def test_interview_evaluation_uses_local_fallback_without_api_key(self, _mock_getenv):
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.post(
+            "/api/interview-evaluate/",
+            {
+                "question": "Describe a project you delivered.",
+                "answer": "I improved the deployment process and reduced release time.",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("Rating:", response.data["feedback"])
+
     def test_social_login_invalid_token(self):
         response = self.client.post(
             "/api/social-login/", {"token": "invalid_token"}, format="json"
