@@ -38,7 +38,7 @@ def analyze_resume(uploaded_file_bytes: bytes) -> ResumeAnalysis:
     model_name = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
 
     llm = ChatGoogleGenerativeAI(
-        model="gemini-3.8-flash",
+        model=model_name,
         google_api_key=api_key,
         temperature=0.1
     )

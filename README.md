@@ -12,34 +12,143 @@ Unlike traditional static career portals, our AI engine utilizes concurrent proc
 
 ## 🏗️ Technical Architecture
 
-This project utilizes a highly decoupled, modern full-stack architecture designed for security, speed, and scalability.
+This project is implemented as a Django-based career intelligence platform with a modular service-oriented backend and a single-page dashboard served from the Django app itself.
 
-* **Frontend (Angular):** Component-based architecture for a responsive, modular UI. Uses Angular Services and RxJS for robust state management.
-* **Backend (Python / Django REST Framework):** Handles JWT authentication, custom ViewSets, and API routing.
-* **Database (MySQL):** Relational data management mapping core user authentication to nested academic histories and unstructured JSON skill arrays.
+* **Presentation Layer:** A server-rendered Tailwind-based dashboard in `templates/index.html` enables the student experience, including resume upload, skill gap visualization, mock interview content, and government opportunity listings.
+* **API Layer:** Django REST Framework exposes endpoints such as resume ingestion, opportunity catalog search, and recommendation generation in `career_app/views.py` and `career_app/urls.py`.
+* **AI Resume Parsing Engine:** `career_app/ml_pipeline.py` reads uploaded PDF resumes using `PyPDFLoader`, extracts text, and calls Google Gemini through LangChain to generate structured outputs for:
+  * detected candidate name
+  * target job roles
+  * extracted skills
+  * missing skill gaps
+  * recommended learning paths
+  * resume improvement suggestions
+  * mock interview questions
+* **Data Layer:** MySQL-compatible Django ORM models in `career_app/models.py` manage student profiles, opportunities, opportunity skill metadata, and profile-to-opportunity match scores.
+* **Opportunity Aggregation & Matching:** `career_app/tasks.py` orchestrates background ingestion and match scoring using Celery workers. Skill and opportunity data is normalized through adapters in `career_app/adapters/`.
+* **External Data Sources:**
+  * government schemes and certified courses are seeded through `GovtSchemesAdapter` and `CoursePortalAdapter`
+  * live commercial jobs can be pulled through `CommercialJobsAdapter` when `RAPIDAPI_KEY` is configured
+  * Redis acts as the broker/result backend for Celery tasks
+* **Background Processing:** Async scoring and scraper jobs allow the platform to analyze resumes and populate opportunities without blocking the main request flow.
 
 ## 🚀 Core Innovations
 
-* **Dynamic Employability Score:** An algorithmic evaluation matching user JSON-mapped skills against industry baseline requirements.
-* **Aggregator Architecture:** Utilizes Python's `ThreadPoolExecutor` to execute parallel HTTP requests to external APIs (job boards, YouTube Data API, government portals) to generate personalized roadmaps with zero UI blocking.
-* **Hyper-Local Impact:** Algorithmically prioritizes Madhya Pradesh state empowerment initiatives to directly align with regional economic goals.
+* **Dynamic Employability Score:** The system compares a candidate’s extracted skills against opportunity skill requirements and produces a readiness score and ranked recommendation list.
+* **AI-Driven Resume Intelligence:** Gemini-powered parsing transforms raw PDF content into structured skill analysis and actionable career guidance.
+* **Opportunity Aggregator Architecture:** Adapters normalize heterogeneous public and government data sources into a unified opportunity catalog with deduplication and relevance matching.
+* **Hyper-Local Impact:** The platform prioritizes Madhya Pradesh programs and public initiatives such as the MP Mukhyamantri Seekho Kamao Yojana while also surfacing national courses and jobs.
 
 ## ⚙️ Local Setup Instructions
 
-### Backend (Django)
+### 1) Prerequisites
 
-\`\`\`bash
-cd backend
-python -m venv venv
-source venv/bin/activate  # On Windows use: venv\Scripts\activate
+Before running the project locally, install:
+
+* Python 3.11+
+* MySQL 8+
+* Redis Server
+* A Google AI API key for Gemini (`GOOGLE_API_KEY`)
+* Optional: RapidAPI key for live job feeds (`RAPIDAPI_KEY`)
+
+### 2) Clone and create a virtual environment
+
+```bash
+git clone <your-repository-url>
+cd "AI Career Portal"
+python -m venv .venv
+```
+
+Activate the environment:
+
+```bash
+# Windows
+.venv\Scripts\activate
+
+# macOS / Linux
+source .venv/bin/activate
+```
+
+### 3) Install Python dependencies
+
+```bash
 pip install -r requirements.txt
+```
+
+### 4) Configure environment variables
+
+Create a `.env` file in the project root with values similar to the following:
+
+```env
+DJANGO_SECRET_KEY=your-secret-key
+DEBUG=True
+ALLOWED_HOSTS=127.0.0.1,localhost
+
+DB_NAME=career_portal_db
+DB_USER=root
+DB_PASSWORD=your_mysql_password
+DB_HOST=127.0.0.1
+DB_PORT=3306
+
+GOOGLE_API_KEY=your_google_gemini_key
+GEMINI_MODEL=gemini-3.8-flash
+
+CELERY_BROKER_URL=redis://127.0.0.1:6379/0
+CELERY_RESULT_BACKEND=redis://127.0.0.1:6379/0
+
+RAPIDAPI_KEY=your_optional_rapidapi_key
+```
+
+### 5) Create the MySQL database
+
+```sql
+CREATE DATABASE career_portal_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+```
+
+Then run database migrations:
+
+```bash
 python manage.py migrate
-python manage.py runserver
-\`\`\`
+```
 
-### Frontend (Angular)
+### 6) Start Redis and Celery workers
 
-*Access the application at `http://localhost:3000`*
+Start Redis:
+
+```bash
+redis-server
+```
+
+In a separate terminal:
+
+```bash
+celery -A core_project worker -l info
+```
+
+Optional scheduler for recurring ingestion jobs:
+
+```bash
+celery -A core_project beat -l info
+```
+
+### 7) Run the Django app
+
+```bash
+python manage.py runserver 0.0.0.0:8000
+```
+
+Open the application at:
+
+* Dashboard: `http://localhost:8000/`
+* Admin: `http://localhost:8000/admin/`
+* API base: `http://localhost:8000/api/`
+
+### 8) Typical flow
+
+1. Upload a PDF resume from the dashboard.
+2. The AI pipeline analyzes the resume and saves the extracted profile.
+3. Matching opportunities are generated asynchronously through Celery.
+4. The dashboard displays readiness scores, skill gaps, resume recommendations, and recommended schemes/jobs.
 
 ## 📜 License
 
