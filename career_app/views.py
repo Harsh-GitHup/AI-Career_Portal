@@ -2,6 +2,7 @@ import logging
 import os
 import traceback
 
+from django.conf import settings
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.models import User
 from django.shortcuts import get_object_or_404
@@ -331,15 +332,30 @@ class SocialLoginAPIView(APIView):
             )
 
         try:
-            idinfo = id_token.verify_oauth2_token(token, google_requests.Request())
+            idinfo = id_token.verify_oauth2_token(
+                token,
+                google_requests.Request(),
+                audience=settings.GOOGLE_CLIENT_ID or None,
+            )
             email = idinfo["email"]
             name = idinfo.get("name", "Student")
 
             user, _created = User.objects.get_or_create(
                 username=email, defaults={"email": email, "first_name": name}
             )
+            StudentProfile.objects.get_or_create(
+                user=user,
+                defaults={"full_name": name, "target_role": "Student"},
+            )
             login(request, user)
-            return Response({"message": "Successfully logged in", "user_id": user.id})
+            return Response(
+                {
+                    "message": "Successfully logged in",
+                    "user_id": user.id,
+                    "username": user.username,
+                    "email": user.email,
+                }
+            )
         except ValueError:
             return Response(
                 {"error": "Invalid token"}, status=status.HTTP_401_UNAUTHORIZED
@@ -393,7 +409,13 @@ class ChatbotAPIView(APIView):
             )
             try:
                 response = llm.invoke(f"{context_msg}\n\nUser: {message}\nAI:")
-                return Response({"response": response.content})
+                content = response.content
+                if isinstance(content, list):
+                    content = "".join(
+                        p.get("text", "") if isinstance(p, dict) else str(p)
+                        for p in content
+                    )
+                return Response({"response": content})
             except Exception:  # noqa: BLE001, S110
                 # API failed (likely 429 quota exhausted). Fallback to local heuristic.
                 pass

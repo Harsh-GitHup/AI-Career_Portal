@@ -16,7 +16,7 @@ class OpportunitySerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Opportunity
-        fields = [
+        fields = (
             "id",
             "title",
             "provider",
@@ -30,7 +30,7 @@ class OpportunitySerializer(serializers.ModelSerializer):
             "description",
             "eligibility",
             "required_skills",
-        ]
+        )
 
 
 class ProfileMatchSerializer(serializers.ModelSerializer):
@@ -38,7 +38,7 @@ class ProfileMatchSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ProfileMatch
-        fields = [
+        fields = (
             "id",
             "relevance_score",
             "matching_skills",
@@ -46,7 +46,8 @@ class ProfileMatchSerializer(serializers.ModelSerializer):
             "is_bookmarked",
             "opportunity",
             "cover_letter",
-        ]
+            "created_at",
+        )
 
 
 class AcademicRecordSerializer(serializers.ModelSerializer):

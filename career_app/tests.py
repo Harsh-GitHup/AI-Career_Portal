@@ -128,8 +128,10 @@ class CareerAppTests(TestCase):
         self.assertEqual(len(resume_response.data["results"]), 1)
         self.assertEqual(cover_letter_response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(cover_letter_response.data["results"]), 1)
+        self.assertIn("created_at", cover_letter_response.data["results"][0])
 
-    def test_chatbot_local_fallback(self):
+    @patch("career_app.views.os.getenv", return_value=None)
+    def test_chatbot_local_fallback(self, _mock_getenv):
         self.client.force_authenticate(user=self.user)
 
         response = self.client.post(
@@ -181,6 +183,22 @@ class CareerAppTests(TestCase):
         )
         # Google Auth will throw ValueError for 'invalid_token'
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    @patch("career_app.views.id_token.verify_oauth2_token")
+    def test_social_login_creates_profile_and_returns_username(self, mock_verify):
+        mock_verify.return_value = {
+            "email": "google-user@example.com",
+            "name": "Google User",
+        }
+
+        response = self.client.post(
+            "/api/social-login/", {"token": "valid-token"}, format="json"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        user = User.objects.get(username="google-user@example.com")
+        self.assertEqual(response.data["username"], user.username)
+        self.assertTrue(StudentProfile.objects.filter(user=user).exists())
 
     @patch("career_app.views.analyze_resume")
     @patch("career_app.tasks.run_universal_scraper.delay")

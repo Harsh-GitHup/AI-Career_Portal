@@ -1,4 +1,13 @@
-const API_BASE_URL = 'http://127.0.0.1:8000/api';
+const configuredApiBaseUrl = window.CAREERAI_CONFIG?.apiBaseUrl
+    || document.querySelector('meta[name="careerai-api-base-url"]')?.content;
+const API_BASE_URL = (configuredApiBaseUrl || (
+    ['localhost', '127.0.0.1'].includes(window.location.hostname)
+        ? `${window.location.protocol}//${window.location.hostname}:8000/api`
+        : '/api'
+)).replace(/\/$/, '');
+const GOOGLE_CLIENT_ID = window.CAREERAI_CONFIG?.googleClientId
+    || document.querySelector('meta[name="careerai-google-client-id"]')?.content
+    || '';
 let currentUserId = localStorage.getItem('user_id');
 let currentPage = 1;
 
@@ -24,6 +33,15 @@ function safeExternalUrl(value) {
 
 function encodeInlineValue(value) {
     return encodeURIComponent(String(value ?? ''));
+}
+
+function formatDate(value, includeTime = false) {
+    if (!value) return 'Date unavailable';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return 'Date unavailable';
+    return date.toLocaleString(undefined, includeTime
+        ? { dateStyle: 'medium', timeStyle: 'short' }
+        : { dateStyle: 'medium' });
 }
 
 window.onload = () => {
@@ -109,8 +127,9 @@ async function fetchProfile() {
         });
         if (res.ok) {
             const data = await res.json();
-            if (data.length > 0) {
-                populateDashboard(data[0]);
+            const profiles = data.results || data;
+            if (profiles.length > 0) {
+                populateDashboard(profiles[0]);
                 fetchRecommendations();
             }
         } else if (res.status === 401 || res.status === 403) {
@@ -291,7 +310,63 @@ function closeLogin() {
 }
 
 async function socialLogin() {
-    showToast("Google Login requires a valid Client ID. Please use standard login for now.", "info");
+    if (!GOOGLE_CLIENT_ID) {
+        showToast("Google Login is not configured. Please use standard login for now.", "info");
+        return;
+    }
+
+    if (!window.google?.accounts?.id) {
+        showToast("Google Login is still loading. Please try again.", "error");
+        return;
+    }
+
+    window.google.accounts.id.initialize({
+        client_id: GOOGLE_CLIENT_ID,
+        callback: handleGoogleCredential,
+        cancel_on_tap_outside: true
+    });
+    window.google.accounts.id.prompt((notification) => {
+        if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+            showToast("Google Login could not open. Please try again or use standard login.", "error");
+        }
+    });
+}
+
+async function handleGoogleCredential(response) {
+    if (!response?.credential) {
+        showToast("Google did not return a valid credential.", "error");
+        return;
+    }
+
+    try {
+        const res = await fetch(`${API_BASE_URL}/social-login/`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ token: response.credential })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+            throw new Error(data.error || 'Google Login failed');
+        }
+
+        currentUserId = data.user_id;
+        localStorage.setItem('user_id', data.user_id);
+        localStorage.setItem('username', data.username || data.email || 'Student');
+        document.getElementById('loginBtn').classList.add('hidden');
+        document.getElementById('tab-saved').classList.remove('hidden');
+        document.getElementById('tab-history').classList.remove('hidden');
+        const profileControls = document.getElementById('userProfileControls');
+        profileControls.classList.remove('hidden');
+        profileControls.classList.add('flex');
+        document.getElementById('loggedInUser').innerText = data.username || data.email || 'Student';
+        closeLogin();
+        showToast("Successfully logged in with Google!", "success");
+        fetchProfile();
+    } catch (error) {
+        console.error('Google Login error:', error);
+        showToast(error.message || "Error connecting to server", "error");
+    }
 }
 
 async function standardLogin() {
@@ -713,7 +788,7 @@ async function fetchResumeHistory() {
         container.className = "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6";
 
         data.forEach((item, historyIdx) => {
-            const date = new Date(item.created_at).toLocaleString();
+            const date = formatDate(item.created_at, true);
             const scoreColor = item.readiness_score >= 70 ? 'text-emerald-500' : item.readiness_score >= 40 ? 'text-amber-500' : 'text-rose-500';
 
             // Generate a few skills badges for preview
@@ -723,7 +798,7 @@ async function fetchResumeHistory() {
                 <div class="bg-white p-6 rounded-2xl border border-indigo-100 shadow-sm hover:shadow-md transition-all flex flex-col h-full">
                     <div class="flex justify-between items-start mb-4">
                         <span class="text-xs font-bold text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full"><i class="fa-solid fa-bullseye mr-1"></i> ${escapeHtml(item.target_role || 'General')}</span>
-                        <span class="text-xs font-medium text-slate-400">${new Date(item.created_at).toLocaleDateString()}</span>
+                        <span class="text-xs font-medium text-slate-400">${formatDate(item.created_at)}</span>
                     </div>
                     <div class="flex items-center justify-between mb-4">
                         <span class="text-3xl font-black ${scoreColor}">${item.readiness_score}%</span>
@@ -756,7 +831,7 @@ function openAnalysisModal(historyIdx) {
     if (!window.resumeAnalysisHistory || !window.resumeAnalysisHistory[historyIdx]) return;
 
     const item = window.resumeAnalysisHistory[historyIdx];
-    const date = new Date(item.created_at).toLocaleString();
+    const date = formatDate(item.created_at, true);
     const scoreColor = item.readiness_score >= 70 ? 'text-emerald-500' : item.readiness_score >= 40 ? 'text-amber-500' : 'text-rose-500';
 
     // Generate skills badges (All, not sliced)
@@ -918,7 +993,7 @@ async function fetchCoverLetterHistory() {
 
         data.forEach(match => {
             const opp = match.opportunity;
-            const date = new Date(match.created_at || new Date()).toLocaleDateString();
+            const date = formatDate(match.created_at, true);
             container.innerHTML += `
                 <div class="bg-white p-6 rounded-2xl border border-emerald-100 shadow-sm hover:shadow-md transition-all">
                     <div class="flex justify-between items-start mb-4">
@@ -1225,7 +1300,7 @@ async function submitInterviewAnswer(idx, question, analysisId = null) {
         if (res.ok) {
             feedbackContainer.classList.add('bg-emerald-50', 'text-emerald-800', 'border', 'border-emerald-100');
             // Bold the specific keywords Gemini tends to use (Rating, Good, Missing)
-            let formattedFeedback = escapeHtml(data.feedback || 'No feedback received.').replaceALL(/\n/g, '<br/>');
+            let formattedFeedback = escapeHtml(data.feedback || 'No feedback received.').replace(/\n/g, '<br/>');
             formattedFeedback = formattedFeedback.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
             feedbackContainer.innerHTML = `<i class="fa-solid fa-square-poll-vertical text-emerald-600 text-lg mb-2"></i><br/>${formattedFeedback}`;
         } else {

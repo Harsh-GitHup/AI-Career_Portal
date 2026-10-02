@@ -7,6 +7,9 @@
     <title>CareerAI - Career Intelligence Platform</title>
     <meta name="description"
         content="AI-powered career platform — upload your resume, discover skill gaps, find matching jobs, internships, government schemes, and prepare for interviews." />
+    <!-- Override these values at deployment time before loading app.js. -->
+    <meta name="careerai-api-base-url" content="" />
+    <meta name="careerai-google-client-id" content="" />
     <link rel="icon"
         href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎓</text></svg>" />
     <script src="https://cdn.tailwindcss.com"></script>
@@ -16,7 +19,9 @@
         referrerpolicy="no-referrer" />
     <link rel="stylesheet" href="static/css/style.css" />
     <!-- PDF.js for custom PDF rendering -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js" referrerpolicy="no-referrer"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"
+        referrerpolicy="no-referrer"></script>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 
 <body class="bg-[#F8FAFC] text-slate-800 flex h-screen overflow-hidden relative font-sans selection:bg-indigo-500/30">
