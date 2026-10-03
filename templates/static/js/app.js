@@ -131,6 +131,20 @@ async function fetchProfile() {
             if (profiles.length > 0) {
                 populateDashboard(profiles[0]);
                 fetchRecommendations();
+                
+                // Restore the PDF preview on the dashboard using the latest history
+                try {
+                    const histRes = await fetch(`${API_BASE_URL}/resume-history/`, { credentials: 'include' });
+                    if (histRes.ok) {
+                        const histData = await histRes.json();
+                        const historyList = histData.results || histData;
+                        if (historyList.length > 0 && historyList[0].resume_file) {
+                            renderPDF(historyList[0].resume_file);
+                        }
+                    }
+                } catch (e) {
+                    console.error("Error fetching latest resume PDF:", e);
+                }
             }
         } else if (res.status === 401 || res.status === 403) {
             console.warn("Session expired or unauthorized. Logging out locally.");
@@ -628,7 +642,7 @@ async function fetchOpportunities(page = 1) {
                                     <i class="fa-regular fa-heart text-xl"></i>
                                 </button>
                                 ${['job', 'internship'].includes((opp.opportunity_type || '').toLowerCase()) ? `<button onclick="generateCoverLetter(${opp.id})" class="ml-3 flex-1 bg-white border border-indigo-100 hover:bg-indigo-50 text-indigo-600 text-sm font-bold px-3 py-3 rounded-xl transition-colors shadow-sm"><i class="fa-solid fa-pen-nib mr-2"></i> Cover Letter</button>` : ''}
-                                <a href="${safeExternalUrl(opp.url)}" target="_blank" rel="noopener noreferrer" class="flex-1 ml-3 text-center bg-gradient-to-r from-slate-800 to-slate-900 hover:from-indigo-600 hover:to-indigo-700 text-white text-sm font-bold px-4 py-3 rounded-xl transition-all duration-300 shadow-md hover:shadow-lg">Apply Now &rarr;</a>
+                                <a href="${safeExternalUrl(opp.url)}" target="_blank" rel="noopener noreferrer" class="flex-1 ml-3 text-center bg-gradient-to-r from-slate-800 to-slate-900 hover:from-indigo-600 hover:to-indigo-700 text-white text-sm font-bold px-4 py-3 rounded-xl transition-all duration-300 shadow-md hover:shadow-lg">${((opp.provider || '').toLowerCase().includes('youtube') || (opp.url || '').toLowerCase().includes('youtube')) ? 'View Now' : 'Apply Now'} &rarr;</a>
                             </div>
                         </div>
                     `;
@@ -750,7 +764,7 @@ async function fetchSavedOpportunities() {
                         `<button onclick="generateCoverLetter(${opp.id})" class="ml-3 flex-1 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 text-emerald-700 text-sm font-bold px-3 py-3 rounded-xl transition-colors shadow-sm"><i class="fa-solid fa-file-lines mr-2"></i> View Cover Letter</button>` :
                         `<button onclick="generateCoverLetter(${opp.id})" class="ml-3 flex-1 bg-white border border-indigo-100 hover:bg-indigo-50 text-indigo-600 text-sm font-bold px-3 py-3 rounded-xl transition-colors shadow-sm"><i class="fa-solid fa-pen-nib mr-2"></i> Cover Letter</button>`
                     ) : ''}
-                        <a href="${safeExternalUrl(opp.url)}" target="_blank" rel="noopener noreferrer" class="flex-1 text-center bg-gradient-to-r from-slate-800 to-slate-900 hover:from-indigo-600 hover:to-indigo-700 text-white text-sm font-bold px-4 py-3 rounded-xl transition-all duration-300 shadow-md hover:shadow-lg ml-3">Apply Now &rarr;</a>
+                        <a href="${safeExternalUrl(opp.url)}" target="_blank" rel="noopener noreferrer" class="flex-1 text-center bg-gradient-to-r from-slate-800 to-slate-900 hover:from-indigo-600 hover:to-indigo-700 text-white text-sm font-bold px-4 py-3 rounded-xl transition-all duration-300 shadow-md hover:shadow-lg ml-3">${((opp.provider || '').toLowerCase().includes('youtube') || (opp.url || '').toLowerCase().includes('youtube') || (opp.opportunity_type || '').toLowerCase().includes('course')) ? 'View Now' : 'Apply Now'} &rarr;</a>
                     </div>
                 </div>
             `;
@@ -823,7 +837,7 @@ async function fetchResumeHistory() {
         console.error('fetchResumeHistory error:', e);
         const container = document.getElementById('historyContainer');
         container.className = "space-y-4";
-        container.innerHTML = `<p class="text-sm text-red-500 bg-white p-6 rounded-2xl border border-red-100 text-center">Error loading history.</p>`;
+        container.innerHTML = `<p class="text-sm text-red-500 bg-white p-6 rounded-2xl border border-red-100 text-center">Servers are currently offline or unavailable. Error loading history.</p>`;
     }
 }
 
@@ -1014,7 +1028,7 @@ async function fetchCoverLetterHistory() {
         });
     } catch (e) {
         console.error('fetchCoverLetterHistory error:', e);
-        document.getElementById('coverLetterHistoryContainer').innerHTML = `<p class="text-sm text-red-500 bg-white p-6 rounded-2xl border border-red-100 text-center col-span-full">Error loading cover letters.</p>`;
+        document.getElementById('coverLetterHistoryContainer').innerHTML = `<p class="text-sm text-red-500 bg-white p-6 rounded-2xl border border-red-100 text-center col-span-full">Servers are currently offline or unavailable. Error loading cover letters.</p>`;
     }
 }
 

@@ -135,7 +135,9 @@ class CareerAppTests(TestCase):
         self.client.force_authenticate(user=self.user)
 
         response = self.client.post(
-            "/api/chatbot/", {"message": "How should I improve my resume?"}, format="json"
+            "/api/chatbot/",
+            {"message": "How should I improve my resume?"},
+            format="json",
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -152,17 +154,20 @@ class CareerAppTests(TestCase):
     def test_cover_letter_uses_local_fallback_without_api_key(self, _mock_getenv):
         self.client.force_authenticate(user=self.user)
 
-        response = self.client.post(
-            f"/api/cover-letter/{self.opportunity.id}/")
+        response = self.client.post(f"/api/cover-letter/{self.opportunity.id}/")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn("Django Developer", response.data["cover_letter"])
-        self.assertTrue(ProfileMatch.objects.get(
-            profile=self.profile, opportunity=self.opportunity
-        ).cover_letter)
+        self.assertTrue(
+            ProfileMatch.objects.get(
+                profile=self.profile, opportunity=self.opportunity
+            ).cover_letter
+        )
 
     @patch("career_app.views.os.getenv", return_value=None)
-    def test_interview_evaluation_uses_local_fallback_without_api_key(self, _mock_getenv):
+    def test_interview_evaluation_uses_local_fallback_without_api_key(
+        self, _mock_getenv
+    ):
         self.client.force_authenticate(user=self.user)
 
         response = self.client.post(
@@ -205,24 +210,25 @@ class CareerAppTests(TestCase):
     def test_upload_resume_api(self, mock_scraper, mock_analyze):
         # Mock analysis result
         class MockAnalysis:
-            full_name = "Jane Doe"
-            target_professions = ["Data Scientist"]
-            extracted_skills = ["Python"]
-            skill_gaps = []
-            recommended_courses = []
-            resume_improvements = []
-            interview_questions = []
-            summary = "Data-focused software professional."
-            projects = ["Resume analyzer"]
-            experience = ["Software engineering intern"]
-            academic_records = [
-                {
-                    "degree": "B.Tech",
-                    "institution": "Example University",
-                    "graduation_year": 2024,
-                    "cgpa": 8.5,
-                }
-            ]
+            def __init__(self):
+                self.full_name = "Jane Doe"
+                self.target_professions = ["Data Scientist"]
+                self.extracted_skills = ["Python"]
+                self.skill_gaps = []
+                self.recommended_courses = []
+                self.resume_improvements = []
+                self.interview_questions = []
+                self.summary = "Data-focused software professional."
+                self.projects = ["Resume analyzer"]
+                self.experience = ["Software engineering intern"]
+                self.academic_records = [
+                    {
+                        "degree": "B.Tech",
+                        "institution": "Example University",
+                        "graduation_year": 2024,
+                        "cgpa": 8.5,
+                    }
+                ]
 
         mock_analyze.return_value = MockAnalysis()
 

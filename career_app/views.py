@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 
 class StudentProfileViewSet(viewsets.ModelViewSet):
     serializer_class = StudentProfileSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = (IsAuthenticated,)
 
     def get_queryset(self):
         if not self.request.user.is_authenticated:
@@ -48,7 +48,7 @@ class StudentProfileViewSet(viewsets.ModelViewSet):
 
 class AcademicRecordViewSet(viewsets.ModelViewSet):
     serializer_class = AcademicRecordSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = (IsAuthenticated,)
 
     def get_queryset(self):
         if not self.request.user.is_authenticated:
@@ -82,12 +82,10 @@ class UploadResumeAPIView(APIView):
                     pass
 
             if user_obj:
-                profile, _ = StudentProfile.objects.get_or_create(
-                    user=user_obj)
+                profile, _ = StudentProfile.objects.get_or_create(user=user_obj)
                 profile.full_name = analysis.full_name
             else:
-                profile = StudentProfile.objects.create(
-                    full_name=analysis.full_name)
+                profile = StudentProfile.objects.create(full_name=analysis.full_name)
 
             profile.target_role = (
                 analysis.target_professions[0]
@@ -102,9 +100,17 @@ class UploadResumeAPIView(APIView):
             profile.projects = analysis.projects
             profile.experience = analysis.experience
 
-            # Dynamic Readiness Calculation
-            penalty = len(analysis.skill_gaps) * 8
-            profile.readiness_score = max(35, 100 - penalty)
+            # Dynamic Readiness Calculation based on evidence
+            num_skills = len(analysis.extracted_skills)
+            num_gaps = len(analysis.skill_gaps)
+            total_req = num_skills + num_gaps
+
+            skill_score = (num_skills / total_req * 40) if total_req > 0 else 0
+            exp_score = min(30, len(analysis.experience) * 10)
+            proj_score = min(30, len(analysis.projects) * 10)
+
+            raw_score = 30 + skill_score + exp_score + proj_score - (num_gaps * 2)
+            profile.readiness_score = int(max(35, min(100, raw_score)))
             profile.save()
 
             # Record History
@@ -128,25 +134,21 @@ class UploadResumeAPIView(APIView):
                 try:
                     AcademicRecord.objects.create(
                         student=profile,
-                        degree=str(record.get("degree", "Unknown Degree"))[
-                            :150],
+                        degree=str(record.get("degree", "Unknown Degree"))[:150],
                         institution=str(
                             record.get("institution", "Unknown Institution")
                         )[:200],
-                        graduation_year=int(
-                            record.get("graduation_year", 2024)),
+                        graduation_year=int(record.get("graduation_year", 2024)),
                         cgpa=float(record.get("cgpa", 0.0)),
                     )
                 except Exception as e:  # noqa: BLE001
-                    logger.warning(
-                        f"Failed to save academic record {record}: {e}")
+                    logger.warning(f"Failed to save academic record {record}: {e}")
 
             # 3. Trigger Celery Asynchronous Scraper (which chains match scoring)
             try:
                 run_universal_scraper.delay(profile.id)
             except Exception as e:  # noqa: BLE001
-                logger.warning(
-                    f"Background tasks skipped (Redis may be down): {e}")
+                logger.warning(f"Background tasks skipped (Redis may be down): {e}")
 
             return Response(
                 {
@@ -211,7 +213,7 @@ class ResumeAnalysisHistoryAPIView(generics.ListAPIView):
     """Fetch all past resume analysis results for the logged-in user."""
 
     serializer_class = ResumeAnalysisSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = (IsAuthenticated,)
 
     def get_queryset(self):
         return ResumeAnalysis.objects.filter(user=self.request.user).order_by(
@@ -223,7 +225,7 @@ class CoverLetterHistoryAPIView(generics.ListAPIView):
     """Fetch all past generated cover letters for the logged-in user."""
 
     serializer_class = ProfileMatchSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = (IsAuthenticated,)
 
     def get_queryset(self):
         return (
@@ -238,10 +240,22 @@ class OpportunityListAPIView(generics.ListAPIView):
 
     queryset = Opportunity.objects.filter(is_active=True)
     serializer_class = OpportunitySerializer
-    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
-    search_fields = ["title", "provider", "description", "required_skills__skill_name"]
-    ordering_fields = ["created_at", "title", "deadline"]
-    ordering = ["-created_at"]
+    filter_backends = (
+        filters.SearchFilter,
+        filters.OrderingFilter,
+    )
+    search_fields = (
+        "title",
+        "provider",
+        "description",
+        "required_skills__skill_name",
+    )
+    ordering_fields = (
+        "created_at",
+        "title",
+        "deadline",
+    )
+    ordering = ("-created_at",)
 
     def get_queryset(self):
         search_query = self.request.query_params.get("search")
@@ -296,7 +310,7 @@ class OpportunityTypesAPIView(APIView):
 class RecommendedMatchesAPIView(APIView):
     """Retrieves ranked opportunities for the authenticated user's profile."""
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = (IsAuthenticated,)
 
     def get(self, request, *args, **kwargs):
         try:
@@ -364,7 +378,7 @@ class SocialLoginAPIView(APIView):
 
 @method_decorator(csrf_exempt, name="dispatch")
 class ChatbotAPIView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = (IsAuthenticated,)
 
     def post(self, request, *args, **kwargs):
         message = request.data.get("message")
@@ -401,11 +415,12 @@ class ChatbotAPIView(APIView):
             pass
 
         api_key = os.getenv("GOOGLE_API_KEY")
+        model_name = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
         if api_key:
             from langchain_google_genai import ChatGoogleGenerativeAI
 
             llm = ChatGoogleGenerativeAI(
-                model="gemini-3.8-flash", google_api_key=api_key, temperature=0.7
+                model=model_name, google_api_key=api_key, temperature=0.7
             )
             try:
                 response = llm.invoke(f"{context_msg}\n\nUser: {message}\nAI:")
@@ -518,7 +533,7 @@ class LogoutAPIView(APIView):
 
 
 class ToggleBookmarkAPIView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = (IsAuthenticated,)
 
     def post(self, request, opp_id, *args, **kwargs):
         opportunity = get_object_or_404(Opportunity, id=opp_id)
@@ -541,7 +556,7 @@ class ToggleBookmarkAPIView(APIView):
 
 
 class GenerateCoverLetterAPIView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = (IsAuthenticated,)
 
     def post(self, request, opp_id, *args, **kwargs):
         opportunity = get_object_or_404(Opportunity, id=opp_id)
@@ -563,13 +578,14 @@ class GenerateCoverLetterAPIView(APIView):
             )
 
         api_key = os.getenv("GOOGLE_API_KEY")
+        model_name = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
         cover_letter = None
         if api_key:
             try:
                 from langchain_google_genai import ChatGoogleGenerativeAI
 
                 llm = ChatGoogleGenerativeAI(
-                    model="gemini-3.8-flash", google_api_key=api_key, temperature=0.7
+                    model=model_name, google_api_key=api_key, temperature=0.7
                 )
                 prompt = f"""
                 Write a professional cover letter for the following job opportunity.
@@ -592,7 +608,8 @@ class GenerateCoverLetterAPIView(APIView):
                     )
             except Exception as e:  # noqa: BLE001
                 logger.warning(
-                    "Cover letter provider unavailable; using local fallback: %s", e)
+                    "Cover letter provider unavailable; using local fallback: %s", e
+                )
 
         if not cover_letter:
             cover_letter = generate_local_cover_letter(profile, opportunity)
@@ -610,7 +627,7 @@ class GenerateCoverLetterAPIView(APIView):
 
 
 class InterviewEvaluationAPIView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = (IsAuthenticated,)
 
     def post(self, request, *args, **kwargs):
         question = request.data.get("question")
@@ -625,12 +642,13 @@ class InterviewEvaluationAPIView(APIView):
         analysis_id = request.data.get("analysis_id")
         feedback = None
         api_key = os.getenv("GOOGLE_API_KEY")
+        model_name = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
         if api_key:
             try:
                 from langchain_google_genai import ChatGoogleGenerativeAI
 
                 llm = ChatGoogleGenerativeAI(
-                    model="gemini-3.8-flash", google_api_key=api_key, temperature=0.7
+                    model=model_name, google_api_key=api_key, temperature=0.7
                 )
                 response = llm.invoke(f"""
                 You are an expert technical interviewer evaluating a candidate's answer.
@@ -647,7 +665,9 @@ class InterviewEvaluationAPIView(APIView):
                     )
             except Exception as e:  # noqa: BLE001
                 logger.warning(
-                    "Interview evaluation provider unavailable; using local fallback: %s", e)
+                    "Interview evaluation provider unavailable; using local fallback: %s",
+                    e,
+                )
 
         if not feedback:
             feedback = evaluate_local_interview_answer(question, answer)

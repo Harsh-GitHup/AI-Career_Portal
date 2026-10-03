@@ -90,12 +90,11 @@ def analyze_resume(uploaded_file_bytes: bytes) -> ResumeAnalysis:
     api_key = os.getenv("GOOGLE_API_KEY")
 
     if not api_key:
-        logger.info(
-            "GOOGLE_API_KEY is unavailable; using local resume analysis")
+        logger.info("GOOGLE_API_KEY is unavailable; using local resume analysis")
         return _analyze_resume_locally(resume_text)
 
     try:
-        model_name = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
+        model_name = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
         llm = ChatGoogleGenerativeAI(
             model=model_name,
             google_api_key=api_key,
@@ -123,7 +122,8 @@ def analyze_resume(uploaded_file_bytes: bytes) -> ResumeAnalysis:
         return structured_llm.invoke(prompt)
     except Exception as e:  # noqa: BLE001
         logger.warning(
-            "External resume analysis unavailable; using local fallback: %s", e)
+            "External resume analysis unavailable; using local fallback: %s", e
+        )
         return _analyze_resume_locally(resume_text)
 
 
@@ -131,8 +131,7 @@ def calculate_opportunity_relevance(
     candidate_skills: list[str], target_role: str, opportunity
 ) -> tuple[float, list[str], str]:
     """Calculates relevance score based on skill overlap and target role keyword matching."""
-    opp_skills = list(opportunity.required_skills.values_list(
-        "skill_name", flat=True))
+    opp_skills = list(opportunity.required_skills.values_list("skill_name", flat=True))
     if not opp_skills:
         # If no skills assigned, assign neutral baseline
         return 50.0, [], "General career alignment."

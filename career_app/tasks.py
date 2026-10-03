@@ -42,8 +42,7 @@ def run_universal_scraper(self, profile_id: int):
         calculate_matches_for_profile.delay(profile_id)
 
     except StudentProfile.DoesNotExist:
-        logger.error(
-            f"Profile {profile_id} not found for universal scraper task.")
+        logger.error(f"Profile {profile_id} not found for universal scraper task.")
     except Exception as exc:
         logger.exception("Error executing universal scraper for profile %s", profile_id)
         raise self.retry(exc=exc, countdown=60)
@@ -91,8 +90,7 @@ def calculate_matches_for_profile(self, profile_id: int):
     except StudentProfile.DoesNotExist:
         logger.error(f"Profile {profile_id} not found for match calculation.")
     except Exception as exc:
-        logger.exception(
-            "Error calculating matches for profile %s", profile_id)
+        logger.exception("Error calculating matches for profile %s", profile_id)
         raise self.retry(exc=exc, countdown=60)
 
 
@@ -100,10 +98,8 @@ def calculate_matches_for_profile(self, profile_id: int):
 def nightly_refresh_all_profiles():
     """Beat task: refreshes opportunity data for all student profiles nightly."""
     profile_ids = list(
-        StudentProfile.objects.exclude(
-            target_role="").values_list("id", flat=True)
+        StudentProfile.objects.exclude(target_role="").values_list("id", flat=True)
     )
     for pid in profile_ids:
         run_universal_scraper.delay(pid)
-    logger.info(
-        f"Nightly refresh: queued {len(profile_ids)} profile scraping jobs.")
+    logger.info(f"Nightly refresh: queued {len(profile_ids)} profile scraping jobs.")

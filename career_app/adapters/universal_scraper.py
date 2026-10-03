@@ -241,6 +241,12 @@ class UniversalScraperAdapter:
                 "hackathon", "unstop.com", "Unstop Hackathons", "Hackathon"
             ),
             self.scrape_google_dorks(
+                "scholarship", "buddy4study.com", "Buddy4Study", "Scholarship"
+            ),
+            self.scrape_google_dorks(
+                "workshop", "eventbrite.com", "Eventbrite", "Workshop"
+            ),
+            self.scrape_google_dorks(
                 "skill", "mmsky.mp.gov.in", "MMSKY (MP Govt)", "Scheme"
             ),
             self.scrape_google_dorks(
