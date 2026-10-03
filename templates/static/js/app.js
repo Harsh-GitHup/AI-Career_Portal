@@ -641,7 +641,11 @@ async function fetchOpportunities(page = 1) {
                                 <button onclick="toggleBookmark(${opp.id}, this)" class="w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-300 shadow-sm text-slate-400 bg-white border border-slate-200 hover:text-rose-500 hover:border-rose-200 hover:bg-rose-50">
                                     <i class="fa-regular fa-heart text-xl"></i>
                                 </button>
-                                ${['job', 'internship'].includes((opp.opportunity_type || '').toLowerCase()) ? `<button onclick="generateCoverLetter(${opp.id})" class="ml-3 flex-1 bg-white border border-indigo-100 hover:bg-indigo-50 text-indigo-600 text-sm font-bold px-3 py-3 rounded-xl transition-colors shadow-sm"><i class="fa-solid fa-pen-nib mr-2"></i> Cover Letter</button>` : ''}
+                                ${['job', 'internship'].includes((opp.opportunity_type || '').toLowerCase()) ? 
+                                    (opp.has_cover_letter ? 
+                                        `<button onclick="generateCoverLetter(${opp.id})" class="ml-3 flex-1 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 text-emerald-700 text-sm font-bold px-3 py-3 rounded-xl transition-colors shadow-sm"><i class="fa-solid fa-file-lines mr-2"></i> View Cover Letter</button>` : 
+                                        `<button onclick="generateCoverLetter(${opp.id})" class="ml-3 flex-1 bg-white border border-indigo-100 hover:bg-indigo-50 text-indigo-600 text-sm font-bold px-3 py-3 rounded-xl transition-colors shadow-sm"><i class="fa-solid fa-pen-nib mr-2"></i> Cover Letter</button>`
+                                    ) : ''}
                                 <a href="${safeExternalUrl(opp.url)}" target="_blank" rel="noopener noreferrer" class="flex-1 ml-3 text-center bg-gradient-to-r from-slate-800 to-slate-900 hover:from-indigo-600 hover:to-indigo-700 text-white text-sm font-bold px-4 py-3 rounded-xl transition-all duration-300 shadow-md hover:shadow-lg">${((opp.provider || '').toLowerCase().includes('youtube') || (opp.url || '').toLowerCase().includes('youtube')) ? 'View Now' : 'Apply Now'} &rarr;</a>
                             </div>
                         </div>
@@ -1106,6 +1110,14 @@ async function generateCoverLetter(oppId) {
 
         if (res.ok) {
             content.innerText = data.cover_letter;
+            // Update button state visually
+            const buttons = document.querySelectorAll(`button[onclick="generateCoverLetter(${oppId})"]`);
+            buttons.forEach(btn => {
+                if (btn.innerText.includes('Cover Letter') && !btn.innerText.includes('View Cover Letter')) {
+                    btn.className = "ml-3 flex-1 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 text-emerald-700 text-sm font-bold px-3 py-3 rounded-xl transition-colors shadow-sm";
+                    btn.innerHTML = `<i class="fa-solid fa-file-lines mr-2"></i> View Cover Letter`;
+                }
+            });
         } else {
             content.innerHTML = `<div class="text-rose-500 text-center"><i class="fa-solid fa-triangle-exclamation mb-2 text-2xl"></i><p>${escapeHtml(data.error || 'Failed to generate cover letter.')}</p></div>`;
         }

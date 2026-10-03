@@ -13,6 +13,7 @@ class OpportunitySerializer(serializers.ModelSerializer):
     required_skills = serializers.SlugRelatedField(
         many=True, read_only=True, slug_field="skill_name"
     )
+    has_cover_letter = serializers.SerializerMethodField()
 
     class Meta:
         model = Opportunity
@@ -30,7 +31,18 @@ class OpportunitySerializer(serializers.ModelSerializer):
             "description",
             "eligibility",
             "required_skills",
+            "has_cover_letter",
         )
+
+    def get_has_cover_letter(self, obj):
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return False
+        return ProfileMatch.objects.filter(
+            profile__user=request.user, 
+            opportunity=obj, 
+            cover_letter__isnull=False
+        ).exclude(cover_letter="").exists()
 
 
 class ProfileMatchSerializer(serializers.ModelSerializer):

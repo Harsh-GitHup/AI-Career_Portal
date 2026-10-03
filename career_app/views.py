@@ -260,31 +260,9 @@ class OpportunityListAPIView(generics.ListAPIView):
     def get_queryset(self):
         search_query = self.request.query_params.get("search")
         if search_query:
-            """
-            from .adapters.universal_scraper import UniversalScraperAdapter
-            from .models import OpportunitySkill
-            from django.db import transaction
-            try:
-                adapter = UniversalScraperAdapter()
-                raw_records = adapter.fetch_all(search_query)
-                for norm in raw_records:
-                    skills = norm.pop("skills", [])
-                    with transaction.atomic():
-                        opp, created = Opportunity.objects.update_or_create(
-                            dedupe_hash=norm["dedupe_hash"],
-                            defaults=norm
-                        )
-                        for s in skills:
-                            OpportunitySkill.objects.get_or_create(
-                                opportunity=opp,
-                                skill_name=s.strip()
-                            )
-            except Exception as e:
-                print(f"Dynamic scraping error: {e}")
-            """
             # Note: We rely on the Celery background worker to populate opportunities.
             # Inline blocking scraping is removed to prevent 'database is locked' errors on SQLite.
-            pass  # noqa: PIE790
+            pass
 
         qs = Opportunity.objects.filter(is_active=True)
         opp_type = self.request.query_params.get("type")

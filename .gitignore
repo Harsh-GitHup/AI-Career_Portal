@@ -43,6 +43,8 @@ logs/
 # Databases and local uploads
 *.sqlite
 *.sqlite3
+celery*
+dump.rdb
 uploads/
 media/
 
@@ -73,6 +75,6 @@ __pycache__/
 *.pyc
 
 # Project and test files
-career-readiness-platform
+career-readiness-platform/
+docs/
 dummy.pdf
-celery*
