@@ -1,4 +1,5 @@
 import asyncio
+import base64
 import hashlib
 import logging
 import os
@@ -38,9 +39,13 @@ class UniversalScraperAdapter:
                 cards = soup.find_all("div", class_="individual_internship")
 
                 for card in cards[:3]:
-                    title_elem = card.find("h3", class_="heading_4_5")
-                    company_elem = card.find("p", class_="company_name") or card.find(
-                        "a", class_="link_display_like_text"
+                    title_elem = card.find(
+                        "h2", class_="job-internship-name"
+                    ) or card.find("h3", class_="heading_4_5")
+                    company_elem = (
+                        card.find("p", class_="company-name")
+                        or card.find("p", class_="company_name")
+                        or card.find("a", class_="link_display_like_text")
                     )
                     if title_elem and company_elem:
                         title = title_elem.text.strip()
@@ -75,11 +80,10 @@ class UniversalScraperAdapter:
     async def scrape_google_dorks(
         self, query: str, site: str, provider: str, opp_type: str
     ) -> list[dict]:
-        """Live scrape relying on Google/DuckDuckGo syntax for sites that block bots (LinkedIn/Naukri)"""
+        """Live scrape relying on Bing syntax for sites that block bots"""
         results = []
         try:
-            # Using DuckDuckGo HTML for simple scraping without JS
-            url = f"https://html.duckduckgo.com/html/?q=site:{site}+{urllib.parse.quote(query)}+{urllib.parse.quote(opp_type)}"
+            url = f"https://www.bing.com/search?q=site:{site}+{urllib.parse.quote(query)}+{urllib.parse.quote(opp_type)}"
             async with httpx.AsyncClient() as client:
                 response = await client.get(
                     url, headers=self.headers, follow_redirects=True, timeout=10.0
@@ -87,24 +91,50 @@ class UniversalScraperAdapter:
 
             if response.status_code == 200:
                 soup = BeautifulSoup(response.text, "html.parser")
-                results_divs = soup.find_all("div", class_="result")
+                results_items = soup.find_all("li", class_="b_algo")
 
-                for div in results_divs[:3]:
-                    title_elem = div.find("h2", class_="result__title")
-                    snippet_elem = div.find("a", class_="result__snippet")
-                    link_elem = div.find("a", class_="result__url", href=True)
+                for item in results_items[:3]:
+                    h2_elem = item.find("h2")
+                    if not h2_elem:
+                        continue
 
-                    if title_elem and link_elem:
-                        raw_url = link_elem["href"]
-                        # DuckDuckGo wraps links in /l/?uddg=...
-                        parsed_url = urllib.parse.urlparse(raw_url)
-                        qs = urllib.parse.parse_qs(parsed_url.query)
-                        job_url = qs.get("uddg", [raw_url])[0]
+                    link_elem = h2_elem.find("a", href=True)
+                    caption_elem = item.find("div", class_="b_caption")
 
-                        title = title_elem.text.strip()
-                        desc = snippet_elem.text.strip() if snippet_elem else ""
+                    if link_elem:
+                        job_url = link_elem["href"]
+                        # Decode Bing tracking URL
+                        if "bing.com/ck" in job_url:
+                            parsed = urllib.parse.urlparse(job_url)
+                            params = urllib.parse.parse_qs(parsed.query)
+                            if "u" in params:
+                                u_val = params["u"][0]
+                                if u_val.startswith("a1"):
+                                    b64_str = u_val[2:]
+                                    b64_str += "=" * ((4 - len(b64_str) % 4) % 4)
+                                    try:
+                                        job_url = base64.b64decode(
+                                            b64_str.replace("-", "+").replace("_", "/")
+                                        ).decode("utf-8")
+                                    except Exception as e:  # noqa: BLE001
+                                        logger.warning(
+                                            f"Error decoding base64 URL: {e}"
+                                        )
 
-                        if len(title) > 5 and site in job_url:
+                        title = link_elem.text.strip()
+                        desc = caption_elem.text.strip() if caption_elem else ""
+
+                        # Filter out aggregate search/category pages (e.g., "100 jobs in X")
+                        title_lower = title.lower()
+                        if (
+                            " jobs in " in title_lower
+                            or " jobs at " in title_lower
+                            or " salaries " in title_lower
+                            or " jobs:" in title_lower
+                        ):
+                            continue
+
+                        if len(title) > 5:
                             results.append(
                                 {
                                     "dedupe_hash": self._compute_hash(job_url),
@@ -122,7 +152,7 @@ class UniversalScraperAdapter:
                                 }
                             )
         except Exception as e:  # noqa: BLE001
-            logger.warning(f"DuckDuckGo scraping error for {site}: {e}")
+            logger.warning(f"Bing scraping error for {site}: {e}")
         return results
 
     async def fetch_adzuna_jobs(self, query: str) -> list[dict]:
@@ -226,37 +256,41 @@ class UniversalScraperAdapter:
             self.scrape_google_dorks(query, "naukri.com/job-listings", "Naukri", "job"),
             self.scrape_google_dorks(query, "linkedin.com/jobs", "LinkedIn", "job"),
             self.scrape_google_dorks(query, "aicte-india.org", "AICTE", "internship"),
+            self.scrape_google_dorks(query, "unstop.com", "Unstop", "job"),
+            self.scrape_google_dorks(query, "unstop.com", "Unstop", "internship"),
+            self.scrape_google_dorks(query, "jobaaz.com", "Jobaaz", "job"),
+            self.scrape_google_dorks(query, "jobaaz.com", "Jobaaz", "internship"),
             self.fetch_adzuna_jobs(query),
         ]
-        scraped_data = await asyncio.gather(*tasks)
-        for data in scraped_data:
+        # Run sequentially to avoid rate limiting
+        for task in tasks:
+            data = await task
             results.extend(data)
+            await asyncio.sleep(1.0)
         return results
 
     async def fetch_schemes_and_courses(self, query: str) -> list[dict]:
         """Fetch general Hackathons, MPSeDC, and MMSKY opportunities via search indexing"""
         results = []
         tasks = [
-            self.scrape_google_dorks(
-                "hackathon", "unstop.com", "Unstop Hackathons", "Hackathon"
-            ),
+            self.scrape_google_dorks("hackathon", "unstop.com", "Unstop", "Hackathon"),
+            self.scrape_google_dorks(query, "unstop.com", "Unstop", "course"),
+            self.scrape_google_dorks(query, "jobaaz.com", "Jobaaz", "course"),
             self.scrape_google_dorks(
                 "scholarship", "buddy4study.com", "Buddy4Study", "Scholarship"
             ),
             self.scrape_google_dorks(
                 "workshop", "eventbrite.com", "Eventbrite", "Workshop"
             ),
-            self.scrape_google_dorks(
-                "skill", "mmsky.mp.gov.in", "MMSKY (MP Govt)", "Scheme"
-            ),
-            self.scrape_google_dorks(
-                "course", "nptel.ac.in", "IIT Madras / Ministry of Education", "Course"
-            ),
+            self.scrape_google_dorks("scheme", "mmsky.mp.gov.in", "MMSKY", "Scheme"),
+            self.scrape_google_dorks("course", "nptel.ac.in", "NPTEL", "Course"),
             self.fetch_youtube_tutorials(query),
         ]
-        scraped_data = await asyncio.gather(*tasks)
-        for data in scraped_data:
+        # Run sequentially to avoid rate limiting
+        for task in tasks:
+            data = await task
             results.extend(data)
+            await asyncio.sleep(1.0)
         return results
 
     def fetch_all(self, target_role: str) -> list[dict]:
