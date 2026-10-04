@@ -116,17 +116,21 @@ class CareerAppTests(TestCase):
         self.assertIn("YouTube", response.data)
 
     def test_opportunities_search_and_ordering(self):
-        response = self.client.get("/api/opportunities/", {"search": "Django", "ordering": "title"})
+        response = self.client.get(
+            "/api/opportunities/", {"search": "Django", "ordering": "title"}
+        )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertGreaterEqual(len(response.data["results"]), 1)
-        self.assertIn("Django Developer", [r["title"] for r in response.data["results"]])
+        self.assertIn(
+            "Django Developer", [r["title"] for r in response.data["results"]]
+        )
 
     def test_student_profile_update(self):
         self.client.force_authenticate(user=self.user)
         response = self.client.patch(
             f"/api/profiles/{self.profile.id}/",
             {"target_role": "Senior Engineer"},
-            format="json"
+            format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.profile.refresh_from_db()
@@ -134,19 +138,23 @@ class CareerAppTests(TestCase):
 
     def test_academic_record_crud(self):
         self.client.force_authenticate(user=self.user)
-        res = self.client.post("/api/academics/", {
-            "degree": "B.Sc",
-            "institution": "MIT",
-            "graduation_year": 2025,
-            "cgpa": 9.0
-        }, format="json")
+        res = self.client.post(
+            "/api/academics/",
+            {
+                "degree": "B.Sc",
+                "institution": "MIT",
+                "graduation_year": 2025,
+                "cgpa": 9.0,
+            },
+            format="json",
+        )
         self.assertEqual(res.status_code, status.HTTP_201_CREATED)
         record_id = res.data["id"]
-        
+
         # Read
         res = self.client.get("/api/academics/")
         self.assertEqual(len(res.data["results"]), 1)
-        
+
         # Delete
         res = self.client.delete(f"/api/academics/{record_id}/")
         self.assertEqual(res.status_code, status.HTTP_204_NO_CONTENT)

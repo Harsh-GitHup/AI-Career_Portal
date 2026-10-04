@@ -4,20 +4,21 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('career_app', '0010_profilematch_cover_letter'),
+        ("career_app", "0010_profilematch_cover_letter"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='studentprofile',
-            name='interview_feedbacks',
-            field=models.JSONField(default=dict, help_text='Saved mock interview answers and feedbacks'),
+            model_name="studentprofile",
+            name="interview_feedbacks",
+            field=models.JSONField(
+                default=dict, help_text="Saved mock interview answers and feedbacks"
+            ),
         ),
         migrations.AlterField(
-            model_name='profilematch',
-            name='cover_letter',
-            field=models.TextField(blank=True, default=''),
+            model_name="profilematch",
+            name="cover_letter",
+            field=models.TextField(blank=True, default=""),
         ),
     ]

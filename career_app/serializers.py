@@ -35,14 +35,16 @@ class OpportunitySerializer(serializers.ModelSerializer):
         )
 
     def get_has_cover_letter(self, obj):
-        request = self.context.get('request')
+        request = self.context.get("request")
         if not request or not request.user.is_authenticated:
             return False
-        return ProfileMatch.objects.filter(
-            profile__user=request.user, 
-            opportunity=obj, 
-            cover_letter__isnull=False
-        ).exclude(cover_letter="").exists()
+        return (
+            ProfileMatch.objects.filter(
+                profile__user=request.user, opportunity=obj, cover_letter__isnull=False
+            )
+            .exclude(cover_letter="")
+            .exists()
+        )
 
 
 class ProfileMatchSerializer(serializers.ModelSerializer):

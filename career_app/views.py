@@ -53,10 +53,14 @@ class AcademicRecordViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         if not self.request.user.is_authenticated:
             return AcademicRecord.objects.none()
-        return AcademicRecord.objects.filter(student__user=self.request.user)
+        return AcademicRecord.objects.filter(student__user=self.request.user).order_by(
+            "-id"
+        )
 
     def perform_create(self, serializer):
-        profile, _ = StudentProfile.objects.get_or_create(user=self.request.user, defaults={"target_role": "Undecided"})
+        profile, _ = StudentProfile.objects.get_or_create(
+            user=self.request.user, defaults={"target_role": "Undecided"}
+        )
         serializer.save(student=profile)
 
 
@@ -300,13 +304,13 @@ class OpportunityProvidersAPIView(APIView):
             .values_list("provider", flat=True)
             .distinct()
         )
-        
+
         providers = set()
         for p in raw_providers:
             top_level = p.split(" - ")[0].strip()
             providers.add(top_level)
-            
-        return Response(sorted(list(providers)))
+
+        return Response(sorted(providers))
 
 
 class RecommendedMatchesAPIView(APIView):
@@ -687,9 +691,15 @@ class InterviewEvaluationAPIView(APIView):
                 profile.save(update_fields=["interview_feedbacks"])
 
             if analysis_id:
-                analysis = ResumeAnalysis.objects.filter(id=analysis_id, user=request.user).first()
+                analysis = ResumeAnalysis.objects.filter(
+                    id=analysis_id, user=request.user
+                ).first()
             else:
-                analysis = ResumeAnalysis.objects.filter(user=request.user).order_by("-created_at").first()
+                analysis = (
+                    ResumeAnalysis.objects.filter(user=request.user)
+                    .order_by("-created_at")
+                    .first()
+                )
 
             if analysis:
                 if not isinstance(analysis.interview_feedbacks, dict):
