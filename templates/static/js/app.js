@@ -60,6 +60,7 @@ window.onload = () => {
     }
 
     fetchDynamicTypes();
+    fetchDynamicProviders();
 };
 
 // Preview will only show the most recently uploaded resume in the active session.
@@ -161,6 +162,7 @@ async function fetchProfile() {
 function populateDashboard(profile) {
     document.getElementById('page-title').innerText = `Welcome, ${profile.full_name || localStorage.getItem('username')}`;
     document.getElementById('targetRole').innerText = profile.target_role || "Not Set";
+    document.getElementById('targetSub').innerText = profile.target_role ? "Analysis complete! We've successfully mapped your skills against industry benchmarks for this role." : "Upload your resume to let our AI extract validated skills and match you with industry benchmarks.";
     document.getElementById('readinessScore').innerText = `${profile.readiness_score || 0}%`;
 
     // Skills Table
@@ -276,6 +278,33 @@ async function fetchDynamicTypes() {
     } catch (e) {
         console.error("Error fetching opportunity types", e);
         showToast("Backend server is currently offline. Some features may not load.", "error");
+    }
+}
+
+async function fetchDynamicProviders() {
+    try {
+        const res = await fetch(`${API_BASE_URL}/opportunities/providers/`);
+        if (res.ok) {
+            const providers = await res.json();
+            const providerSelect = document.getElementById('providerOpp');
+            const savedProviderSelect = document.getElementById('savedProviderFilter');
+            providers.forEach(p => {
+                const opt = document.createElement('option');
+                opt.value = p;
+                opt.textContent = p;
+                providerSelect.appendChild(opt);
+
+                if (savedProviderSelect) {
+                    const optSaved = document.createElement('option');
+                    optSaved.value = p;
+                    optSaved.textContent = p;
+                    savedProviderSelect.appendChild(optSaved);
+                }
+            });
+        }
+    } catch (e) {
+        console.error("Error fetching opportunity types", e);
+        // showToast("Backend server is currently offline. Some features may not load.", "error");
     }
 }
 
@@ -513,6 +542,7 @@ async function logout() {
 
             document.getElementById('page-title').innerText = "Welcome, Student";
             document.getElementById('targetRole').innerText = "N/A";
+            document.getElementById('targetSub').innerText = "Upload your resume to let our AI extract validated skills and match you with industry benchmarks.";
             document.getElementById('readinessScore').innerText = "--";
             document.getElementById('skillsTableBody').innerHTML = `<tr><td colspan="3" class="py-4 px-6 text-center text-gray-500">Upload resume to view analysis</td></tr>`;
             document.getElementById('schemesContainer').innerHTML = ``;
@@ -609,11 +639,13 @@ async function fetchOpportunities(page = 1) {
     currentPage = page;
     const search = document.getElementById('searchOpp').value;
     const type = document.getElementById('typeOpp').value;
+    const provider = document.getElementById('providerOpp').value;
     const sort = document.getElementById('sortOpp').value;
 
     let url = `${API_BASE_URL}/opportunities/?page=${page}&ordering=${sort}`;
     if (search) url += `&search=${encodeURIComponent(search)}`;
     if (type) url += `&type=${encodeURIComponent(type)}`;
+    if (provider) url += `&provider=${encodeURIComponent(provider)}`;
 
     try {
         const res = await fetch(url, { credentials: 'include' });
@@ -741,6 +773,11 @@ async function fetchSavedOpportunities() {
         const filterValue = document.getElementById('savedTypeFilter')?.value;
         if (filterValue) {
             allMatches = allMatches.filter(m => m.opportunity.opportunity_type === filterValue);
+        }
+
+        const providerFilterValue = document.getElementById('savedProviderFilter')?.value;
+        if (providerFilterValue) {
+            allMatches = allMatches.filter(m => (m.opportunity.provider || '').toLowerCase().startsWith(providerFilterValue.toLowerCase()));
         }
 
         const container = document.getElementById('savedContainer');

@@ -434,6 +434,10 @@
                             class="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white cursor-pointer transition-all">
                             <option value="">All Types</option>
                         </select>
+                        <select id="providerOpp" onchange="fetchOpportunities()"
+                            class="max-w-[160px] truncate bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white cursor-pointer transition-all">
+                            <option value="">All Providers</option>
+                        </select>
                         <select id="sortOpp" onchange="fetchOpportunities()"
                             class="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white cursor-pointer transition-all">
                             <option value="-created_at">Newest First</option>
@@ -514,6 +518,10 @@
                         <select id="savedTypeFilter" onchange="fetchSavedOpportunities()"
                             class="w-full sm:w-auto px-4 py-2 text-sm bg-white border border-gray-200 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-700 font-medium">
                             <option value="">All Saved Types</option>
+                        </select>
+                        <select id="savedProviderFilter" onchange="fetchSavedOpportunities()"
+                            class="max-w-[160px] truncate w-full sm:w-auto px-4 py-2 text-sm bg-white border border-gray-200 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-700 font-medium">
+                            <option value="">All Providers</option>
                         </select>
                     </div>
                 </div>

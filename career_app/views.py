@@ -55,6 +55,10 @@ class AcademicRecordViewSet(viewsets.ModelViewSet):
             return AcademicRecord.objects.none()
         return AcademicRecord.objects.filter(student__user=self.request.user)
 
+    def perform_create(self, serializer):
+        profile, _ = StudentProfile.objects.get_or_create(user=self.request.user, defaults={"target_role": "Undecided"})
+        serializer.save(student=profile)
+
 
 @method_decorator(csrf_exempt, name="dispatch")
 class UploadResumeAPIView(APIView):
@@ -268,9 +272,12 @@ class OpportunityListAPIView(generics.ListAPIView):
         qs = Opportunity.objects.filter(is_active=True)
         opp_type = self.request.query_params.get("type")
         is_free = self.request.query_params.get("is_free")
+        provider = self.request.query_params.get("provider")
 
         if opp_type:
             qs = qs.filter(opportunity_type__icontains=opp_type)
+        if provider:
+            qs = qs.filter(provider__istartswith=provider)
         if is_free is not None and is_free != "":
             qs = qs.filter(is_free=(is_free.lower() == "true"))
         return qs.distinct()
@@ -284,6 +291,22 @@ class OpportunityTypesAPIView(APIView):
             .distinct()
         )
         return Response([t for t in types])
+
+
+class OpportunityProvidersAPIView(APIView):
+    def get(self, request, *args, **kwargs):
+        raw_providers = (
+            Opportunity.objects.exclude(provider="")
+            .values_list("provider", flat=True)
+            .distinct()
+        )
+        
+        providers = set()
+        for p in raw_providers:
+            top_level = p.split(" - ")[0].strip()
+            providers.add(top_level)
+            
+        return Response(sorted(list(providers)))
 
 
 class RecommendedMatchesAPIView(APIView):

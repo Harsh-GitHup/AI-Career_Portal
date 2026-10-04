@@ -11,6 +11,7 @@ from .views import (
     LogoutAPIView,
     OpportunityListAPIView,
     OpportunityTypesAPIView,
+    OpportunityProvidersAPIView,
     RecommendedMatchesAPIView,
     RegisterAPIView,
     ResumeAnalysisHistoryAPIView,
@@ -42,6 +43,11 @@ urlpatterns = [
         "opportunities/types/",
         OpportunityTypesAPIView.as_view(),
         name="api_opportunity_types",
+    ),
+    path(
+        "opportunities/providers/",
+        OpportunityProvidersAPIView.as_view(),
+        name="api_opportunity_providers",
     ),
     path(
         "recommendations/",

@@ -85,6 +85,72 @@ class CareerAppTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data, ["Job"])
 
+    def test_opportunities_can_filter_by_provider(self):
+        Opportunity.objects.create(
+            dedupe_hash="opp_prov",
+            title="Frontend Developer",
+            provider="YouTube - Code",
+            opportunity_type="Course",
+            is_free=True,
+            url="http://example.com/course",
+        )
+        # Search by prefix "YouTube"
+        response = self.client.get("/api/opportunities/", {"provider": "YouTube"})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data["results"]), 1)
+        self.assertEqual(response.data["results"][0]["title"], "Frontend Developer")
+
+    def test_opportunity_providers_api(self):
+        Opportunity.objects.create(
+            dedupe_hash="opp_prov_2",
+            title="Backend Course",
+            provider="YouTube - Web",
+            opportunity_type="Course",
+            is_free=True,
+            url="http://example.com/course2",
+        )
+        response = self.client.get("/api/opportunities/providers/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        # Should contain "TechCorp" and "YouTube" (the distinct split top-levels)
+        self.assertIn("TechCorp", response.data)
+        self.assertIn("YouTube", response.data)
+
+    def test_opportunities_search_and_ordering(self):
+        response = self.client.get("/api/opportunities/", {"search": "Django", "ordering": "title"})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertGreaterEqual(len(response.data["results"]), 1)
+        self.assertIn("Django Developer", [r["title"] for r in response.data["results"]])
+
+    def test_student_profile_update(self):
+        self.client.force_authenticate(user=self.user)
+        response = self.client.patch(
+            f"/api/profiles/{self.profile.id}/",
+            {"target_role": "Senior Engineer"},
+            format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.target_role, "Senior Engineer")
+
+    def test_academic_record_crud(self):
+        self.client.force_authenticate(user=self.user)
+        res = self.client.post("/api/academics/", {
+            "degree": "B.Sc",
+            "institution": "MIT",
+            "graduation_year": 2025,
+            "cgpa": 9.0
+        }, format="json")
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        record_id = res.data["id"]
+        
+        # Read
+        res = self.client.get("/api/academics/")
+        self.assertEqual(len(res.data["results"]), 1)
+        
+        # Delete
+        res = self.client.delete(f"/api/academics/{record_id}/")
+        self.assertEqual(res.status_code, status.HTTP_204_NO_CONTENT)
+
     def test_recommendations_api(self):
         self.client.force_authenticate(user=self.user)
         response = self.client.get("/api/recommendations/")
