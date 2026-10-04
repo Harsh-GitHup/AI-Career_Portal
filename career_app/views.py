@@ -96,6 +96,7 @@ class UploadResumeAPIView(APIView):
             profile.skill_gaps = analysis.skill_gaps
             profile.resume_improvements = analysis.resume_improvements
             profile.interview_questions = analysis.interview_questions
+            profile.interview_feedbacks = {}  # Clear previous feedbacks on new upload
             profile.bio = analysis.summary
             profile.projects = analysis.projects
             profile.experience = analysis.experience
@@ -651,23 +652,32 @@ class InterviewEvaluationAPIView(APIView):
             feedback = evaluate_local_interview_answer(question, answer)
 
         try:
-            if analysis_id:
-                try:
-                    # Update the ResumeAnalysis record with the feedback
-                    analysis = ResumeAnalysis.objects.get(
-                        id=analysis_id, user=request.user
-                    )
-                    if not isinstance(analysis.interview_feedbacks, dict):
-                        analysis.interview_feedbacks = {}
+            # Update StudentProfile
+            profile = StudentProfile.objects.filter(user=request.user).first()
+            if profile:
+                if not isinstance(profile.interview_feedbacks, dict):
+                    profile.interview_feedbacks = {}
+                profile.interview_feedbacks[question] = {
+                    "answer": answer,
+                    "feedback": feedback,
+                }
+                profile.save(update_fields=["interview_feedbacks"])
 
-                    # Store both answer and feedback, keyed by the question text
-                    analysis.interview_feedbacks[question] = {
-                        "answer": answer,
-                        "feedback": feedback,
-                    }
-                    analysis.save(update_fields=["interview_feedbacks"])
-                except ResumeAnalysis.DoesNotExist:
-                    pass  # Silently ignore if not found
+            if analysis_id:
+                analysis = ResumeAnalysis.objects.filter(id=analysis_id, user=request.user).first()
+            else:
+                analysis = ResumeAnalysis.objects.filter(user=request.user).order_by("-created_at").first()
+
+            if analysis:
+                if not isinstance(analysis.interview_feedbacks, dict):
+                    analysis.interview_feedbacks = {}
+
+                # Store both answer and feedback, keyed by the question text
+                analysis.interview_feedbacks[question] = {
+                    "answer": answer,
+                    "feedback": feedback,
+                }
+                analysis.save(update_fields=["interview_feedbacks"])
 
             return Response({"feedback": feedback}, status=status.HTTP_200_OK)
         except Exception as e:  # noqa: BLE001

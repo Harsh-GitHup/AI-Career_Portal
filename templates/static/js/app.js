@@ -216,10 +216,24 @@ function populateDashboard(profile) {
         (profile.interview_questions || []).forEach((q, idx) => {
             // Escape quotes so we can pass the string nicely to submitInterviewAnswer
             const encodedQ = encodeInlineValue(q);
+
+            let savedFeedbackHtml = '';
+            if (profile.interview_feedbacks && profile.interview_feedbacks[q]) {
+                const savedData = profile.interview_feedbacks[q];
+                let formattedFeedback = escapeHtml(savedData.feedback).replaceAll(/\n/g, '<br/>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+                savedFeedbackHtml = `
+                    <div class="mt-4 p-4 rounded-xl text-sm font-medium leading-relaxed bg-emerald-50 text-emerald-800 border border-emerald-100">
+                        <div class="mb-3 p-3 bg-white/50 rounded-lg italic text-gray-700"><strong>Your Answer:</strong> ${escapeHtml(savedData.answer)}</div>
+                        <i class="fa-solid fa-square-poll-vertical text-emerald-600 text-lg mb-2"></i><br/>${formattedFeedback}
+                    </div>
+                `;
+            }
+
             interviewContainer.innerHTML += `
                 <div class="p-5 bg-white border border-gray-100 shadow-sm rounded-xl hover:shadow-md transition-shadow">
                     <span class="text-xs font-bold text-indigo-500 uppercase tracking-wider mb-2 block">Question ${idx + 1}</span>
                     <p class="text-sm font-semibold text-gray-800 mb-4">${escapeHtml(q)}</p>
+                    ${savedFeedbackHtml ? savedFeedbackHtml : `
                     <div class="flex flex-col space-y-3">
                         <button id="btn-record-${idx}" onclick="toggleRecording(${idx})" class="w-fit bg-slate-50 hover:bg-rose-50 text-slate-600 hover:text-rose-600 border border-slate-200 hover:border-rose-200 px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center shadow-sm">
                             <i id="icon-record-${idx}" class="fa-solid fa-microphone mr-2"></i>
@@ -232,7 +246,7 @@ function populateDashboard(profile) {
                             </button>
                         </div>
                         <div id="feedback-container-${idx}" class="hidden p-4 rounded-xl text-sm font-medium leading-relaxed"></div>
-                    </div>
+                    </div>`}
                 </div>`;
         });
     } else {

@@ -19,6 +19,9 @@ class StudentProfile(models.Model):
     interview_questions = models.JSONField(
         default=list, help_text="Tailored mock interview questions"
     )
+    interview_feedbacks = models.JSONField(
+        default=dict, help_text="Saved mock interview answers and feedbacks"
+    )
     projects = models.JSONField(
         default=list, help_text="List of extracted project details"
     )
@@ -105,7 +108,7 @@ class ProfileMatch(models.Model):
     matching_skills = models.JSONField(default=list)
     reasoning = models.TextField(blank=True)
     is_bookmarked = models.BooleanField(default=False)
-    cover_letter = models.TextField(blank=True)
+    cover_letter = models.TextField(blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

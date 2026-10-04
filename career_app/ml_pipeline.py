@@ -109,7 +109,7 @@ def analyze_resume(uploaded_file_bytes: bytes) -> ResumeAnalysis:
         3. Extract all explicit skills demonstrated in the projects and experience sections.
         4. Detect 5 to 10 critical industry skill gaps needed to succeed in their primary target role.
         5. Suggest actual SWAYAM/NPTEL certified courses for those gaps.
-        6. Provide 5 high-impact resume enhancement recommendations.
+        6. Provide 5 high-impact resume enhancement recommendations, specifically including actionable improvements for their profile summary and projects.
         7. Provide exactly 5 realistic technical and behavioral interview practice questions.
         8. Extract a short professional summary.
         9. Extract all project details.

@@ -92,6 +92,7 @@ class StudentProfileSerializer(serializers.ModelSerializer):
             "skill_gaps",
             "resume_improvements",
             "interview_questions",
+            "interview_feedbacks",
             "projects",
             "experience",
             "readiness_score",
