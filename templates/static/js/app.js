@@ -129,22 +129,12 @@ async function fetchProfile() {
             const data = await res.json();
             const profiles = data.results || data;
             if (profiles.length > 0) {
-                populateDashboard(profiles[0]);
-                fetchRecommendations();
+                // Do not auto-populate the dashboard with historical data.
+                // Just set the welcome banner with the user's name.
+                document.getElementById('page-title').innerText = `Welcome, ${profiles[0].full_name || localStorage.getItem('username')}`;
                 
-                // Restore the PDF preview on the dashboard using the latest history
-                try {
-                    const histRes = await fetch(`${API_BASE_URL}/resume-history/`, { credentials: 'include' });
-                    if (histRes.ok) {
-                        const histData = await histRes.json();
-                        const historyList = histData.results || histData;
-                        if (historyList.length > 0 && historyList[0].resume_file) {
-                            renderPDF(historyList[0].resume_file);
-                        }
-                    }
-                } catch (e) {
-                    console.error("Error fetching latest resume PDF:", e);
-                }
+                // Keep fetching recommendations for the Saved Matches tab
+                fetchRecommendations();
             }
         } else if (res.status === 401 || res.status === 403) {
             console.warn("Session expired or unauthorized. Logging out locally.");
@@ -239,8 +229,8 @@ function populateDashboard(profile) {
                             <i id="icon-record-${idx}" class="fa-solid fa-microphone mr-2"></i>
                             <span id="text-record-${idx}">Record Answer</span>
                         </button>
-                        <div id="transcript-container-${idx}" class="hidden bg-indigo-50/50 p-4 rounded-xl border border-indigo-100 relative">
-                            <p id="transcript-${idx}" class="text-sm text-slate-700 italic mb-3"></p>
+                        <div id="transcript-container-${idx}" class="bg-indigo-50/50 p-4 rounded-xl border border-indigo-100 relative">
+                            <textarea id="transcript-${idx}" rows="3" placeholder="Type your answer here or click 'Record Answer' to use your microphone..." class="w-full text-sm text-slate-700 bg-white border border-indigo-200 rounded-lg p-3 mb-3 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none resize-y shadow-sm"></textarea>
                                 <button onclick="submitInterviewAnswer(${idx}, '${encodedQ}')" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-2 rounded-lg shadow-md transition-colors w-fit flex items-center">
                                 <i class="fa-solid fa-robot mr-2"></i> Evaluate
                             </button>
@@ -946,8 +936,8 @@ function openAnalysisModal(historyIdx) {
                         <i id="icon-record-${uId}" class="fa-solid fa-microphone mr-2"></i> 
                         <span id="text-record-${uId}">Record Answer</span>
                     </button>
-                    <div id="transcript-container-${uId}" class="hidden bg-indigo-50/50 p-4 rounded-xl border border-indigo-100 relative">
-                        <p id="transcript-${uId}" class="text-sm text-slate-700 italic mb-3"></p>
+                    <div id="transcript-container-${uId}" class="bg-indigo-50/50 p-4 rounded-xl border border-indigo-100 relative">
+                        <textarea id="transcript-${uId}" rows="3" placeholder="Type your answer here or click 'Record Answer' to use your microphone..." class="w-full text-sm text-slate-700 bg-white border border-indigo-200 rounded-lg p-3 mb-3 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none resize-y shadow-sm"></textarea>
                         <button onclick="submitInterviewAnswer('${uId}', '${encodedQ}', ${item.id})" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-2 rounded-lg shadow-md transition-colors w-fit flex items-center">
                             <i class="fa-solid fa-robot mr-2"></i> Evaluate
                         </button>
@@ -1232,7 +1222,7 @@ if ('webkitSpeechRecognition' in window) {
             for (let i = 0; i < event.results.length; i++) {
                 total += event.results[i][0].transcript;
             }
-            transcriptEl.innerText = total;
+            transcriptEl.value = total;
         }
     };
 
@@ -1280,8 +1270,10 @@ function startRecording(idx) {
     icon.classList.add('fa-stop');
     text.innerText = "Stop Recording";
 
-    document.getElementById(`transcript-${idx}`).innerText = "Listening... Speak your answer.";
-    document.getElementById(`transcript-container-${idx}`).classList.remove('hidden');
+    const transcriptEl = document.getElementById(`transcript-${idx}`);
+    if (transcriptEl.value === "") {
+        transcriptEl.placeholder = "Listening... Speak your answer.";
+    }
     document.getElementById(`feedback-container-${idx}`).classList.add('hidden');
     document.getElementById(`feedback-container-${idx}`).classList.remove('bg-emerald-50', 'text-emerald-800', 'border', 'border-emerald-100', 'bg-rose-50', 'text-rose-800');
 
@@ -1308,6 +1300,11 @@ function stopRecording() {
     try {
         recognition.stop();
     } catch (e) { }
+
+    const transcriptEl = document.getElementById(`transcript-${idx}`);
+    if (transcriptEl) {
+        transcriptEl.placeholder = "Type your answer here or click 'Record Answer' to use your microphone...";
+    }
 }
 
 async function submitInterviewAnswer(idx, question, analysisId = null) {
@@ -1315,7 +1312,7 @@ async function submitInterviewAnswer(idx, question, analysisId = null) {
 
     question = decodeURIComponent(question);
 
-    const answer = document.getElementById(`transcript-${idx}`).innerText;
+    const answer = document.getElementById(`transcript-${idx}`).value.trim();
     if (!answer || answer.includes("Listening...")) {
         showToast("Please record a valid answer first.", "error");
         return;

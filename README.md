@@ -8,24 +8,15 @@ This document is the updated project guide for the active root application. The 
 
 ## ✨ What's New
 
-The current project includes the following updates beyond the original README:
+The current project includes the following advanced architecture and security updates:
 
-- Added authenticated profile and academic-record CRUD endpoints through Django REST Framework routers.
-- Added resume-analysis history with uploaded resume files, extracted projects, work experience, academic records, readiness scores, and interview feedback storage.
-- Added cover-letter history and persistent cover letters on profile matches.
-- Added dynamic opportunity type loading and filtering by type, search text, and free/paid status.
-- Added ranked recommendation responses separated into opportunities and government schemes.
-- Added bookmark toggling for authenticated users.
-- Added Gemini-powered chatbot, cover-letter generation, and interview evaluation with local offline fallbacks when the provider is unavailable or no API key is configured.
-- Added contextual chatbot prompts using the user's role, skills, skill gaps, and top matched opportunities.
-- Added a local resume-processing path using PDF extraction, NLP, role classification, skill-gap analysis, recommendations, and tailored interview questions.
-- Added PDF.js canvas rendering for the latest uploaded resume preview.
-- Added browser speech-recognition support for mock interview answers where supported by the browser.
-- Added Google login token verification and session-based login, registration, and logout flows.
-- Added frontend escaping and URL validation helpers for API and user-generated content rendering.
-- Added structured application logging and production-only cookie, clickjacking, content-type, and HTTPS security settings.
-- Added seeded career roles, role skills, course recommendations, and interview questions through the `seed_db` management command.
-- Kept asynchronous scraping and profile matching behind Celery so opportunity search does not perform blocking scraping inside the request.
+- **Fully Decoupled API (React-Ready):** Completely uncoupled backend architecture. Features custom `CsrfExemptSessionAuthentication` and robust CORS mapping (`CORS_ALLOW_CREDENTIALS`), allowing seamless integration with standalone frontends (like React/Next.js).
+- **Production Security Hardening:** Strict dynamic toggling for HTTPS redirects (`SECURE_SSL_REDIRECT`), HTTP Strict Transport Security (`SECURE_HSTS_SECONDS`), and Secure/HttpOnly session cookies when deploying (`DEBUG=False`).
+- **Hybrid Local NLP Engine:** Advanced offline fallback combining strict Regex validation, SpaCy Named Entity Recognition (`en_core_web_sm`) for name extraction, and a Triple-Failsafe for role matching (Hardcoded Rules -> HuggingFace Zero-Shot -> `sentence_transformers` Cosine Similarity) without bloating memory with Sklearn dependencies.
+- **Persistent AI Interview Feedback:** Mock interview answers evaluated by Gemini (or local NLP) are now durably persisted across both the `StudentProfile` and the historical `ResumeAnalysis` records via JSONFields.
+- **Isolated Dashboard UI State:** Advanced frontend session management in Vanilla JS ensures the main dashboard only populates during an active session, keeping historical data strictly compartmentalized in the "Analysis History" tab.
+- **Hybrid Mock Interview Input:** Integrated a dual-mode response system. Candidates can utilize the browser's Web Speech API to dictate their answers, type them out manually via an always-visible textarea, or dictate and dynamically edit the transcript before submitting for AI evaluation.
+- **Rate-Limiting & Asynchronous Offloading:** Heavy LLM extractions and web scraping are strictly delegated to Celery/Redis background workers to guarantee zero UI blocking and protect against API rate limits.
 
 ## 🌟 Main Features
 
