@@ -16,6 +16,7 @@ The current project includes the following advanced architecture and security up
 - **Persistent AI Interview Feedback:** Mock interview answers evaluated by Gemini (or local NLP) are now durably persisted across both the `StudentProfile` and the historical `ResumeAnalysis` records via JSONFields.
 - **Isolated Dashboard UI State:** Advanced frontend session management in Vanilla JS ensures the main dashboard only populates during an active session, keeping historical data strictly compartmentalized in the "Analysis History" tab.
 - **Hybrid Mock Interview Input:** Integrated a dual-mode response system. Candidates can utilize the browser's Web Speech API to dictate their answers, type them out manually via an always-visible textarea, or dictate and dynamically edit the transcript before submitting for AI evaluation.
+- **Dynamic Provider Scraping & UI Filtering:** Migrated to Bing search to bypass rate limits, built a Base64 decoder to extract direct tracking URLs, added new providers (Jobaaz, Unstop), and implemented a dynamic dropdown filter in the UI that cleanly truncates long provider names.
 - **Rate-Limiting & Asynchronous Offloading:** Heavy LLM extractions and web scraping are strictly delegated to Celery/Redis background workers to guarantee zero UI blocking and protect against API rate limits.
 
 ## 🌟 Main Features
@@ -286,6 +287,7 @@ All routes are prefixed with `/api/`.
 | ------ | ------------------------------------- | ------------------------------------------------------- |
 | `GET`  | `/api/opportunities/`                 | List active opportunities                               |
 | `GET`  | `/api/opportunities/types/`           | List distinct opportunity types                         |
+| `GET`  | `/api/opportunities/providers/`       | List distinct opportunity providers                     |
 | `GET`  | `/api/recommendations/`               | Get ranked matches grouped as opportunities and schemes |
 | `POST` | `/api/bookmark/<match_id>/`           | Toggle a profile match bookmark                         |
 | `POST` | `/api/cover-letter/<opportunity_id>/` | Generate or return a saved cover letter                 |
@@ -295,6 +297,7 @@ Opportunity list query parameters include:
 
 - `search`: search title, provider, description, and required skills.
 - `type`: filter by opportunity type, case-insensitively.
+- `provider`: filter by opportunity provider name.
 - `is_free`: filter with `true` or `false`.
 - `search` and DRF ordering parameters can be used with the configured list filters.
 
@@ -333,6 +336,7 @@ Run the Django configuration check:
 
 ```bash
 uv run python manage.py check
+uv run python manage.py check --deploy
 ```
 
 Run the test suite:
@@ -372,6 +376,9 @@ The existing tests cover authentication, opportunity listing and filters, recomm
 - Redis is required for reliable background scraping and scheduled refreshes.
 - External provider calls should be treated as optional because quota, network, and provider model availability can change.
 - Uploaded documents should be valid, readable PDFs and should be validated before production use at the deployment boundary.
+- **Production Server:** The application is pre-configured with `whitenoise` for robust static file serving and WSGI request handling.
+  - **Linux/Mac/WSL:** Run it in production with `uv run gunicorn core_project.wsgi:application --bind 0.0.0.0:8000`.
+  - **Windows:** Gunicorn does not support Windows natively. You can use `waitress` instead: `uv add waitress` then `uv run waitress-serve --listen=127.0.0.1:8000 core_project.wsgi:application`.
 
 ## 📦 Archived Material
 
